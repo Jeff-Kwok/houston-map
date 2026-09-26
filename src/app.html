@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Houston Blackout Map</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#1a2220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>/*INLINE:vendor/leaflet.css*/</style>
+<style>/*INLINE:vendor/leaflet-geoman.css*/</style>
+<style>
+:root{
+  --bg:#eef1ef; --panel:#f8faf9; --ink:#1b2521; --muted:#5b6964; --line:#d3dbd7;
+  --accent:#b8440f; --accent-ink:#ffffff; --ok:#2f7d4f; --warn:#a86a00; --bad:#b3261e;
+  --overlay:#16a3c2;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#121816; --panel:#1a2220; --ink:#e4ebe8; --muted:#94a39d; --line:#2d3935;
+    --accent:#f0874a; --accent-ink:#1a0d05; --ok:#5cc28a; --warn:#e3a93a; --bad:#f07167; --overlay:#4fd0ec;
+    color-scheme:dark;}
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans);display:flex;overflow:hidden}
+#panel{width:340px;flex:none;height:100%;overflow-y:auto;background:var(--panel);border-right:1px solid var(--line);
+  padding:16px 16px 32px;display:flex;flex-direction:column;gap:18px}
+#map{flex:1;height:100%;background:#000}
+h1{font-size:18px;margin:0;letter-spacing:.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:12.5px;margin-top:2px}
+section{display:flex;flex-direction:column;gap:8px}
+h2{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0;font-weight:600}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+button,select,input[type=number]{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);
+  border-radius:6px;padding:6px 10px}
+button{cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button[aria-pressed=true]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+button:disabled{opacity:.45;cursor:not-allowed}
+select{width:100%}
+input[type=number]{width:64px;font-family:var(--mono)}
+input[type=range]{flex:1;accent-color:var(--accent)}
+label{display:flex;gap:6px;align-items:center}
+.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tools button{padding:8px 4px;font-size:13px}
+.stat{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.stat b{color:var(--ink);font-weight:500}
+.note{font-size:12.5px;color:var(--muted);margin:0}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:1px 8px;border-radius:99px;border:1px solid currentColor}
+.pill.ok{color:var(--ok)} .pill.bad{color:var(--bad)} .pill.warn{color:var(--warn)}
+#log{font-family:var(--mono);font-size:11.5px;color:var(--muted);max-height:90px;overflow-y:auto;white-space:pre-wrap;margin:0}
+#overlayList{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none}
+#overlayList li{display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:13px}
+#overlayList li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#hud{position:absolute;right:10px;bottom:calc(30px + env(safe-area-inset-bottom,0px));z-index:800;background:rgba(10,14,12,.78);color:#e8eeeb;
+  font:12px/1.4 var(--mono);font-variant-numeric:tabular-nums;padding:6px 10px;border-radius:6px;pointer-events:none}
+#modeBanner{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:800;background:var(--ink);color:var(--panel);
+  padding:6px 12px;border-radius:6px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#togglePanel{display:none}
+.leaflet-container{font-family:var(--sans)}
+@media (max-width:720px){
+  body{display:block}
+  #map{position:absolute;inset:0}
+  #panel{position:absolute;z-index:900;left:0;top:0;bottom:0;width:min(340px,88vw);box-shadow:4px 0 16px rgba(0,0,0,.3);
+    transition:transform .2s}
+  body.panel-closed #panel{transform:translateX(-100%)}
+  #togglePanel{display:block;position:absolute;z-index:950;left:12px;top:calc(12px + env(safe-area-inset-top,0px));
+    background:var(--panel)}
+  body:not(.panel-closed) #togglePanel{left:calc(min(340px,88vw) + 8px)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<button id="togglePanel" aria-controls="panel">Tools</button>
+<aside id="panel">
+  <header>
+    <h1>Houston Blackout Map</h1>
+    <div class="sub">Residential areas blacked out, so only non-residential land shows. <span id="net" class="pill ok">online</span></div>
+  </header>
+
+  <section>
+    <h2>Imagery</h2>
+    <select id="source" aria-label="Imagery source"></select>
+    <label><input type="checkbox" id="offlineOnly"> Offline only (use saved tiles, no network)</label>
+    <label><input type="checkbox" id="saveBrowse"> Save tiles I look at</label>
+    <p class="note" id="sourceNote"></p>
+  </section>
+
+  <section>
+    <h2>Save imagery for offline</h2>
+    <div class="row">
+      <button id="areaView">Use this view</button>
+      <button id="areaCity">Houston city</button>
+      <button id="areaDraw">Draw area</button>
+    </div>
+    <div class="row">
+      <label>Zoom <input type="number" id="zMin" min="1" max="19" value="10"></label>
+      <label>to <input type="number" id="zMax" min="1" max="19" value="15"></label>
+    </div>
+    <div class="stat" id="estimate">Pick an area.</div>
+    <div class="row">
+      <button id="dlStart" class="primary" disabled>Download tiles</button>
+      <button id="dlStop" disabled>Stop</button>
+    </div>
+    <div class="bar"><i id="dlBar"></i></div>
+    <div class="stat" id="dlStatus"></div>
+    <div class="stat" id="storeStats">Saved: …</div>
+    <div class="row"><button id="clearTiles">Delete saved tiles for this source</button></div>
+  </section>
+
+  <section>
+    <h2>Residential blackout</h2>
+    <div class="row">
+      <button id="osmView">Fetch for this view</button>
+      <button id="osmCity">Fetch for Houston area</button>
+    </div>
+    <div class="bar"><i id="osmBar"></i></div>
+    <div class="stat" id="maskStats"></div>
+    <label>Opacity <input type="range" id="opacity" min="0" max="1" step="0.05" value="1"> <span class="stat" id="opVal">100%</span></label>
+    <label><input type="checkbox" id="showMask" checked> Show blackout</label>
+  </section>
+
+  <section>
+    <h2>Edit blackout</h2>
+    <div class="tools" role="group" aria-label="Edit tools">
+      <button data-mode="pan" aria-pressed="true">Pan</button>
+      <button data-mode="poly" aria-pressed="false">Draw</button>
+      <button data-mode="rect" aria-pressed="false">Box</button>
+      <button data-mode="cut" aria-pressed="false">Cut out</button>
+      <button data-mode="erase" aria-pressed="false">Erase</button>
+      <button data-mode="edit" aria-pressed="false">Reshape</button>
+    </div>
+    <div class="row"><button id="undo" disabled>Undo</button><span class="stat" id="undoInfo"></span></div>
+    <p class="note">Draw and Box black out new ground. Cut out opens a hole in the blackout. Erase removes a whole shape. Reshape moves the corners of one shape. Esc returns to Pan.</p>
+  </section>
+
+  <section>
+    <h2>Overlays and files</h2>
+    <div class="row">
+      <button id="impMask">Import as blackout</button>
+      <button id="impOverlay">Import as overlay</button>
+    </div>
+    <ul id="overlayList"></ul>
+    <div class="row"><button id="expMask">Export blackout (.geojson)</button></div>
+    <input type="file" id="file" accept=".geojson,.json,application/geo+json,application/json" hidden>
+  </section>
+
+  <section>
+    <h2>Activity</h2>
+    <pre id="log"></pre>
+  </section>
+</aside>
+<div id="map"></div>
+<div id="hud">—</div>
+<div id="modeBanner" hidden></div>
+
+<script>/*INLINE:vendor/leaflet.js*/</script>
+<script>/*INLINE:vendor/leaflet-geoman.js*/</script>
+<script>
+"use strict";
+const HOUSTON_BBOX = {s:29.52, w:-95.79, n:30.11, e:-95.01};
+const OVERPASS = ["https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter"];
+const SOURCES = {
+  usgs:{name:"USGS imagery (public domain)", url:"https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
+    maxNative:16, canStore:true, attr:"Imagery: USDA, USGS The National Map",
+    note:"Public-domain aerial imagery, sharp to zoom 16 (about 2.1 m per pixel in Houston). Safe to store offline."},
+  esri:{name:"Esri World Imagery (view only)", url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    maxNative:19, canStore:false, attr:"Imagery: Esri, Maxar, Earthstar Geographics",
+    note:"Sharper, to zoom 19, but Esri's terms restrict bulk downloads, so this source is view only. Offline saving uses USGS."}
+};
+const MAX_TILES = 150000;
+const $ = id => document.getElementById(id);
+const log = msg => { const el=$("log"); el.textContent = `${new Date().toLocaleTimeString()}  ${msg}\n` + el.textContent; };
+const fmtBytes = b => b>=1e9?(b/1e9).toFixed(2)+" GB":b>=1e6?(b/1e6).toFixed(1)+" MB":(b/1e3).toFixed(0)+" kB";
+const fmtN = n => n.toLocaleString("en-US");
+
+/* ---------- storage (IndexedDB) ---------- */
+const db = new Promise((res, rej) => {
+  const r = indexedDB.open("houston-blackout-map", 1);
+  r.onupgradeneeded = () => { r.result.createObjectStore("tiles"); r.result.createObjectStore("kv"); };
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  setTimeout(() => rej(new Error("browser storage did not open")), 4000);
+});
+db.catch(e => log(`Offline storage unavailable (${e.message}). Start the map with run.sh.`));
+function idb(store, mode, fn){
+  return db.then(d => new Promise((res, rej) => {
+    const tx = d.transaction(store, mode); const out = fn(tx.objectStore(store));
+    tx.oncomplete = () => res(out && "result" in out ? out.result : undefined);
+    tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
+  }));
+}
+const kvGet = k => idb("kv","readonly", s => s.get(k));
+const kvPut = (k,v) => idb("kv","readwrite", s => s.put(v,k));
+const tileGet = k => idb("tiles","readonly", s => s.get(k)).catch(() => undefined);
+const tileHas = k => idb("tiles","readonly", s => s.getKey(k));
+const tilePut = (k,blob) => idb("tiles","readwrite", s => s.put(blob,k));
+navigator.storage?.persist?.().catch(()=>{});
+
+/* ---------- state ---------- */
+const state = { source:"usgs", offlineOnly:false, saveBrowse:false, maskOpacity:1, mode:"pan",
+  area:null, deletedOsm:new Set(), overlays:[] };
+
+/* ---------- map ---------- */
+const map = L.map("map", {zoomControl:false, maxZoom:19, minZoom:3}).setView([29.7604,-95.3698], 11);
+L.control.zoom({position: matchMedia("(max-width:720px)").matches ? "topright" : "topleft"}).addTo(map);
+map.attributionControl.setPrefix(false);
+const maskRenderer = L.canvas({padding:0.4});
+
+const OfflineTiles = L.TileLayer.extend({
+  createTile(coords, done){
+    const img = document.createElement("img"); img.alt = ""; img.setAttribute("role","presentation");
+    const src = SOURCES[this.options.sourceKey];
+    const key = `${this.options.sourceKey}/${coords.z}/${coords.x}/${coords.y}`;
+    img.onload = () => done(null, img); img.onerror = e => done(e, img);
+    tileGet(key).then(blob => {
+      if (blob) { img.src = URL.createObjectURL(blob); return; }
+      if (state.offlineOnly) { done(null, img); return; }
+      const url = this.getTileUrl(coords);
+      if (state.saveBrowse && src.canStore) {
+        fetch(url).then(r => r.ok ? r.blob() : Promise.reject(new Error(r.status)))
+          .then(b => { tilePut(key, b).then(()=>bumpStats(1, b.size), ()=>{}); img.src = URL.createObjectURL(b); })
+          .catch(e => done(e, img));
+      } else { img.crossOrigin = ""; img.src = url; }
+    }).catch(e => done(e, img));
+    return img;
+  }
+});
+let base;
+function setSource(key){
+  state.source = key; const s = SOURCES[key];
+  if (base) map.removeLayer(base);
+  base = new OfflineTiles(s.url, {sourceKey:key, maxNativeZoom:s.maxNative, maxZoom:19, attribution:s.attr});
+  base.on("tileunload", e => { if (e.tile.src.startsWith("blob:")) URL.revokeObjectURL(e.tile.src); });
+  base.addTo(map); base.bringToBack();
+  $("sourceNote").textContent = s.note;
+  $("saveBrowse").disabled = !s.canStore;
+  refreshStats(); updateEstimate();
+}
+
+/* ---------- saved-tile stats ---------- */
+let stats = {};
+function refreshStats(want = state.source){
+  let n=0, bytes=0;
+  idb("tiles","readonly", s => { const c = s.openCursor(IDBKeyRange.bound(want+"/", want+"/￿"));
+    c.onsuccess = () => { const cur=c.result; if(!cur) return; n++; bytes += cur.value.size||0; cur.continue(); }; })
+  .then(() => { stats[want] = {n, bytes}; showStats(); });
+}
+function bumpStats(n, bytes){ const s = stats[state.source] ||= {n:0,bytes:0}; s.n+=n; s.bytes+=bytes; showStats(); }
+function showStats(){
+  const s = stats[state.source] || {n:0,bytes:0};
+  $("storeStats").innerHTML = `Saved (${state.source.toUpperCase()}): <b>${fmtN(s.n)}</b> tiles · <b>${fmtBytes(s.bytes)}</b>` +
+    (s.n ? ` · avg ${fmtBytes(s.bytes/s.n)}/tile` : "");
+  updateEstimate();
+}
+
+/* ---------- tile math + download ---------- */
+const lon2x = (lon,z) => Math.floor((lon+180)/360*2**z);
+const lat2y = (lat,z) => { const r=lat*Math.PI/180; return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*2**z); };
+const clampT = (v,z) => Math.max(0, Math.min(2**z-1, v));
+function tileRanges(b, zMin, zMax){
+  const out=[]; for (let z=zMin; z<=zMax; z++){
+    out.push({z, x0:clampT(lon2x(b.w,z),z), x1:clampT(lon2x(b.e,z),z), y0:clampT(lat2y(b.n,z),z), y1:clampT(lat2y(b.s,z),z)}); }
+  return out;
+}
+const countTiles = rs => rs.reduce((a,r)=>a+(r.x1-r.x0+1)*(r.y1-r.y0+1),0);
+function* tileIter(rs){ for (const r of rs) for (let x=r.x0;x<=r.x1;x++) for (let y=r.y0;y<=r.y1;y++) yield {z:r.z,x,y}; }
+function zooms(){
+  const cap = SOURCES.usgs.maxNative;
+  let a = Math.max(1, Math.min(cap, +$("zMin").value||1)), b = Math.max(1, Math.min(cap, +$("zMax").value||1));
+  if (a>b) [a,b]=[b,a]; return [a,b];
+}
+let areaLayer = null;
+function setArea(b, label){
+  state.area = b;
+  if (areaLayer) map.removeLayer(areaLayer);
+  areaLayer = L.rectangle([[b.s,b.w],[b.n,b.e]], {color:"#f5b301", weight:2, dashArray:"6 5", fill:false, interactive:false, pmIgnore:true}).addTo(map);
+  log(`Download area: ${label}`); updateEstimate();
+}
+function updateEstimate(){
+  const el = $("estimate");
+  if (!state.area){ el.textContent = "Pick an area."; $("dlStart").disabled = true; return; }
+  const [a,b] = zooms(); const n = countTiles(tileRanges(state.area,a,b));
+  const s = stats.usgs; const avg = s && s.n>20 ? s.bytes/s.n : null;
+  el.innerHTML = `<b>${fmtN(n)}</b> tiles, zoom ${a}–${b}` + (avg ? ` · about ${fmtBytes(n*avg)} at your measured average` : " · size shows once some tiles are saved");
+  const busy = !!dl;
+  $("dlStart").disabled = busy || n===0 || n>MAX_TILES;
+  if (n>MAX_TILES) el.innerHTML += `<br>Over the ${fmtN(MAX_TILES)}-tile limit. Lower the top zoom or shrink the area.`;
+}
+let dl = null;
+async function startDownload(){
+  const [a,b] = zooms(); const rs = tileRanges(state.area,a,b); const total = countTiles(rs);
+  const it = tileIter(rs); const src = SOURCES.usgs;
+  dl = {stop:false}; let done=0, saved=0, skipped=0, failed=0, bytes=0;
+  $("dlStop").disabled = false; updateEstimate();
+  log(`Downloading ${fmtN(total)} USGS tiles (zoom ${a}–${b})`);
+  const show = () => { $("dlBar").style.width = (100*done/total).toFixed(1)+"%";
+    $("dlStatus").textContent = `${fmtN(done)}/${fmtN(total)} · new ${fmtN(saved)} · had ${fmtN(skipped)} · failed ${fmtN(failed)} · ${fmtBytes(bytes)}`; };
+  async function worker(){
+    for (let n = it.next(); !n.done && !dl.stop; n = it.next()){
+      const t = n.value, key = `usgs/${t.z}/${t.x}/${t.y}`;
+      try {
+        if (await tileHas(key) !== undefined) { skipped++; }
+        else {
+          const url = src.url.replace("{z}",t.z).replace("{x}",t.x).replace("{y}",t.y);
+          let r; for (let i=0;i<3;i++){ try { r = await fetch(url); if (r.ok || r.status===404) break; } catch(e){ r=null; } await new Promise(s=>setTimeout(s, 800*(i+1))); }
+          if (r && r.ok){ const blob = await r.blob(); await tilePut(key, blob); saved++; bytes+=blob.size;
+            if (state.source==="usgs") bumpStats(1, blob.size); }
+          else failed++;
+        }
+      } catch(e){ failed++; }
+      done++; if (done%10===0) show();
+    }
+  }
+  await Promise.all(Array.from({length:6}, worker));
+  show(); log(`${dl.stop?"Stopped":"Finished"}: ${fmtN(saved)} new tiles, ${fmtN(failed)} failed`);
+  dl = null; $("dlStop").disabled = true; updateEstimate();
+}
+
+/* ---------- blackout mask ---------- */
+const maskStyle = () => ({stroke:false, fill:true, fillColor:"#000", fillOpacity:state.maskOpacity, renderer:maskRenderer});
+const mask = L.geoJSON(null, {style:maskStyle, renderer:maskRenderer}).addTo(map);
+const osmIds = () => { const s=new Set(); mask.eachLayer(l => { const id=l.feature?.properties?.osm; if(id) s.add(id); }); return s; };
+function maskCount(){ let o=0,d=0; mask.eachLayer(l => (l.feature?.properties?.osm ? o++ : d++));
+  $("maskStats").innerHTML = `<b>${fmtN(o)}</b> OSM residential areas · <b>${fmtN(d)}</b> drawn/imported shapes`; }
+let saveTimer=null;
+function saveMask(){ maskCount(); clearTimeout(saveTimer); saveTimer = setTimeout(() => {
+  kvPut("mask", mask.toGeoJSON()); kvPut("deletedOsm", [...state.deletedOsm]); }, 700); }
+const undoStack = [];
+function pushUndo(label){
+  undoStack.push({label, fc:mask.toGeoJSON(), del:[...state.deletedOsm]}); if (undoStack.length>12) undoStack.shift();
+  $("undo").disabled=false; $("undoInfo").textContent = `last: ${label}`;
+}
+function undo(){
+  const u = undoStack.pop(); if (!u) return; setMode("pan");
+  mask.clearLayers(); mask.addData(u.fc); state.deletedOsm = new Set(u.del); saveMask();
+  $("undo").disabled = !undoStack.length; $("undoInfo").textContent = undoStack.length ? `last: ${undoStack.at(-1).label}` : ""; log(`Undid: ${u.label}`);
+}
+function adoptLayer(layer, props){
+  map.removeLayer(layer);
+  layer.feature = {type:"Feature", properties: props || {src:"drawn"}};
+  layer.setStyle(maskStyle()); mask.addLayer(layer);
+}
+
+/* ---------- OSM residential fetch ---------- */
+const same = (a,b) => a[0]===b[0] && a[1]===b[1];
+function joinRings(ways){
+  const pool = ways.filter(w=>w.length>1).map(w=>w.slice()), rings=[];
+  while (pool.length){
+    let ring = pool.shift();
+    while (!same(ring[0], ring.at(-1))){
+      let hit = false;
+      for (let i=0;i<pool.length;i++){ const w = pool[i];
+        if (same(ring.at(-1), w[0])) ring = ring.concat(w.slice(1));
+        else if (same(ring.at(-1), w.at(-1))) ring = ring.concat(w.slice(0,-1).reverse());
+        else if (same(ring[0], w.at(-1))) ring = w.slice(0,-1).concat(ring);
+        else if (same(ring[0], w[0])) ring = w.slice(1).reverse().concat(ring);
+        else continue;
+        pool.splice(i,1); hit = true; break; }
+      if (!hit) break;
+    }
+    if (ring.length>=3){ if (!same(ring[0],ring.at(-1))) ring.push(ring[0]); rings.push(ring); }
+  }
+  return rings;
+}
+function inRing(pt, ring){ let c=false; for (let i=0,j=ring.length-1;i<ring.length;j=i++){
+  const [xi,yi]=ring[i],[xj,yj]=ring[j]; if (((yi>pt[1])!==(yj>pt[1])) && pt[0] < (xj-xi)*(pt[1]-yi)/(yj-yi)+xi) c=!c; } return c; }
+const geomLL = g => g.map(p => [p.lon, p.lat]);
+function elementToFeature(el){
+  const props = {osm:`${el.type}/${el.id}`, name:el.tags?.name||""};
+  if (el.type==="way"){
+    if (!el.geometry || el.geometry.length<4) return null;
+    const ring = geomLL(el.geometry); if (!same(ring[0],ring.at(-1))) return null;
+    return {type:"Feature", properties:props, geometry:{type:"Polygon", coordinates:[ring]}};
+  }
+  const mem = (el.members||[]).filter(m => m.type==="way" && m.geometry);
+  const outers = joinRings(mem.filter(m=>m.role!=="inner").map(m=>geomLL(m.geometry)));
+  const inners = joinRings(mem.filter(m=>m.role==="inner").map(m=>geomLL(m.geometry)));
+  if (!outers.length) return null;
+  const polys = outers.map(o => [o, ...inners.filter(i => inRing(i[0], o))]);
+  return {type:"Feature", properties:props, geometry: polys.length===1 ? {type:"Polygon",coordinates:polys[0]} : {type:"MultiPolygon",coordinates:polys}};
+}
+async function overpass(q){
+  let lastErr;
+  for (let attempt=0; attempt<OVERPASS.length*2; attempt++){
+    const ep = OVERPASS[attempt % OVERPASS.length];
+    try {
+      const r = await fetch(ep, {method:"POST", body:"data="+encodeURIComponent(q), headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+      const text = await r.text();
+      if (r.ok && text.trimStart().startsWith("{")) return JSON.parse(text);
+      lastErr = new Error(`${new URL(ep).host}: ${r.status} ${/too busy|timeout|rate_limited/i.test(text)?"server busy":""}`);
+    } catch(e){ lastErr = e; }
+    log(`OSM retry: ${lastErr.message}`);
+    await new Promise(s=>setTimeout(s, 2500*(attempt+1)));
+  }
+  throw lastErr;
+}
+let osmBusy = false;
+async function fetchResidential(b, label){
+  if (osmBusy) return; osmBusy = true; $("osmView").disabled = $("osmCity").disabled = true;
+  const step = 0.1, cells = [];
+  for (let s=b.s; s<b.n; s+=step) for (let w=b.w; w<b.e; w+=step) cells.push([s, w, Math.min(s+step,b.n), Math.min(w+step,b.e)]);
+  log(`Fetching OSM residential areas for ${label} in ${cells.length} pieces`);
+  pushUndo(`fetch ${label}`);
+  const have = osmIds(); let added = 0, failedCells = 0;
+  for (let i=0;i<cells.length;i++){
+    const bb = cells[i].map(v=>v.toFixed(5)).join(",");
+    const q = `[out:json][timeout:90];(way["landuse"="residential"](${bb});relation["landuse"="residential"](${bb}););out geom;`;
+    try {
+      const data = await overpass(q); const fc = {type:"FeatureCollection", features:[]};
+      for (const el of data.elements){ const id = `${el.type}/${el.id}`;
+        if (have.has(id) || state.deletedOsm.has(id)) continue;
+        const f = elementToFeature(el); if (f){ fc.features.push(f); have.add(id); } }
+      mask.addData(fc); added += fc.features.length; saveMask();
+    } catch(e){ failedCells++; log(`Piece ${i+1} failed: ${e.message}`); }
+    $("osmBar").style.width = (100*(i+1)/cells.length).toFixed(0)+"%";
+    await new Promise(s=>setTimeout(s, 1000));
+  }
+  log(`Added ${fmtN(added)} residential areas` + (failedCells ? `; ${failedCells} pieces failed, run it again to fill them` : ""));
+  osmBusy = false; $("osmView").disabled = $("osmCity").disabled = false;
+}
+
+/* ---------- edit modes ---------- */
+let editing = null;
+const MODE_TEXT = {poly:"Draw: click corners, click the first corner to finish.", rect:"Box: drag a rectangle to black it out.",
+  cut:"Cut out: draw a shape to open a hole in the blackout.", erase:"Erase: click a black shape to remove it.",
+  edit:"Reshape: click a black shape, then drag its corners.", area:"Draw the area to save offline."};
+function stopEditing(){ if (editing){ editing.pm.disable(); editing.setStyle(maskStyle()); editing = null; saveMask(); } }
+function setMode(m){
+  map.pm.disableDraw(); if (map.pm.globalCutModeEnabled()) map.pm.disableGlobalCutMode(); stopEditing();
+  state.mode = m;
+  document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode===m));
+  $("modeBanner").hidden = !MODE_TEXT[m]; $("modeBanner").textContent = (MODE_TEXT[m]||"") + "  Esc to stop.";
+  const opts = {snappable:false, continueDrawing:true, pathOptions:{color:"#f5b301", weight:2, fillColor:"#000", fillOpacity:.6}};
+  if (m==="poly") map.pm.enableDraw("Polygon", opts);
+  if (m==="rect") map.pm.enableDraw("Rectangle", opts);
+  if (m==="area") map.pm.enableDraw("Rectangle", {...opts, continueDrawing:false, pathOptions:{color:"#f5b301", fill:false}});
+  if (m==="cut") map.pm.enableGlobalCutMode({snappable:false, layersToCut:mask.getLayers()});
+}
+map.on("pm:create", e => {
+  if (state.mode==="area"){ const b = e.layer.getBounds(); map.removeLayer(e.layer);
+    setArea({s:b.getSouth(), w:b.getWest(), n:b.getNorth(), e:b.getEast()}, "drawn rectangle"); setMode("pan"); return; }
+  if (state.mode==="cut") return;
+  pushUndo(state.mode==="rect"?"box":"drawn shape"); adoptLayer(e.layer); saveMask();
+});
+map.on("pm:drawstart", () => { if (state.mode==="cut") pushUndo("cut out"); });
+map.on("pm:cut", e => {
+  const props = e.originalLayer?.feature?.properties;
+  mask.removeLayer(e.originalLayer);
+  if (e.layer && e.layer.getLatLngs && e.layer.getLatLngs().flat(3).length) adoptLayer(e.layer, props ? {...props} : undefined);
+  else if (e.layer) map.removeLayer(e.layer);
+  saveMask();
+});
+mask.on("click", e => {
+  const l = e.layer;
+  if (state.mode==="erase"){ pushUndo("erase"); const id = l.feature?.properties?.osm; if (id) state.deletedOsm.add(id);
+    mask.removeLayer(l); saveMask(); L.DomEvent.stop(e); }
+  else if (state.mode==="edit"){ if (editing===l) return; stopEditing(); pushUndo("reshape");
+    editing = l; l.setStyle({stroke:true, color:"#f5b301", weight:2});
+    l.pm.enable({snappable:false, allowSelfIntersection:true}); L.DomEvent.stop(e); }
+});
+map.on("click", () => { if (state.mode==="edit") stopEditing(); });
+document.addEventListener("keydown", e => { if (e.key==="Escape") setMode("pan"); });
+
+/* ---------- overlays + files ---------- */
+let importTarget = "mask";
+function addOverlay(o){
+  o.layer = L.geoJSON(o.geojson, {pmIgnore:true, style:{color:getComputedStyle(document.documentElement).getPropertyValue("--overlay").trim()||"#16a3c2", weight:2, fillOpacity:.15},
+    pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:5, pmIgnore:true}),
+    onEachFeature:(f,l)=>{ const n=f.properties?.name; if (n) l.bindTooltip(String(n)); }}).addTo(map);
+  state.overlays.push(o); renderOverlays();
+}
+function renderOverlays(){
+  const ul = $("overlayList"); ul.textContent = "";
+  state.overlays.forEach((o,i) => { const li = document.createElement("li"); const s = document.createElement("span"); s.textContent = o.name;
+    const b = document.createElement("button"); b.textContent = "Remove";
+    b.onclick = () => { map.removeLayer(o.layer); state.overlays.splice(i,1); renderOverlays(); saveOverlays(); };
+    li.append(s,b); ul.append(li); });
+}
+const saveOverlays = () => kvPut("overlays", state.overlays.map(o => ({name:o.name, geojson:o.geojson})));
+$("file").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  let gj; try { gj = JSON.parse(await f.text()); } catch { log(`${f.name} is not valid GeoJSON`); return; }
+  if (importTarget==="mask"){
+    pushUndo(`import ${f.name}`);
+    const feats = (gj.type==="FeatureCollection" ? gj.features : [gj.type==="Feature"?gj:{type:"Feature",properties:{},geometry:gj}])
+      .filter(x => /Polygon/.test(x.geometry?.type||""));
+    const have = osmIds();
+    mask.addData({type:"FeatureCollection", features:feats.filter(x => !have.has(x.properties?.osm))});
+    saveMask(); log(`Imported ${fmtN(feats.length)} shapes from ${f.name} as blackout`);
+  } else { addOverlay({name:f.name, geojson:gj}); saveOverlays(); log(`Added overlay ${f.name}`); }
+});
+$("impMask").onclick = () => { importTarget="mask"; $("file").click(); };
+$("impOverlay").onclick = () => { importTarget="overlay"; $("file").click(); };
+$("expMask").onclick = () => {
+  const blob = new Blob([JSON.stringify(mask.toGeoJSON())], {type:"application/geo+json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "houston-blackout.geojson";
+  document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+};
+
+/* ---------- controls ---------- */
+for (const [k,s] of Object.entries(SOURCES)){ const o=document.createElement("option"); o.value=k; o.textContent=s.name; $("source").append(o); }
+$("source").onchange = e => { setSource(e.target.value); kvPut("settings", settings()); };
+$("offlineOnly").onchange = e => { state.offlineOnly = e.target.checked; base.redraw(); kvPut("settings", settings()); };
+$("saveBrowse").onchange = e => { state.saveBrowse = e.target.checked; kvPut("settings", settings()); };
+$("opacity").oninput = e => { state.maskOpacity = +e.target.value; $("opVal").textContent = Math.round(state.maskOpacity*100)+"%";
+  mask.setStyle(maskStyle()); if (editing) editing.setStyle({stroke:true, color:"#f5b301", weight:2}); };
+$("opacity").onchange = () => kvPut("settings", settings());
+$("showMask").onchange = e => e.target.checked ? mask.addTo(map) : map.removeLayer(mask);
+const viewBox = () => { const b = map.getBounds(); return {s:b.getSouth(), w:b.getWest(), n:b.getNorth(), e:b.getEast()}; };
+$("areaView").onclick = () => setArea(viewBox(), "current view");
+$("areaCity").onclick = () => { setArea(HOUSTON_BBOX, "Houston city (bounding box)"); map.fitBounds([[HOUSTON_BBOX.s,HOUSTON_BBOX.w],[HOUSTON_BBOX.n,HOUSTON_BBOX.e]]); };
+$("areaDraw").onclick = () => setMode("area");
+$("zMin").oninput = $("zMax").oninput = updateEstimate;
+$("dlStart").onclick = startDownload;
+$("dlStop").onclick = () => { if (dl) dl.stop = true; };
+$("clearTiles").onclick = async () => {
+  const b = $("clearTiles");
+  if (b.dataset.armed !== "1"){ b.dataset.armed="1"; b.textContent="Click again to delete"; setTimeout(()=>{b.dataset.armed=""; b.textContent="Delete saved tiles for this source";}, 4000); return; }
+  b.dataset.armed=""; b.textContent="Delete saved tiles for this source";
+  const p = state.source; await idb("tiles","readwrite", s => s.delete(IDBKeyRange.bound(p+"/", p+"/￿")));
+  log(`Deleted saved ${p.toUpperCase()} tiles`); refreshStats(); base.redraw();
+};
+$("osmView").onclick = () => { if (map.getZoom() < 12) { log("Zoom in to 12 or closer, or use Fetch for Houston"); return; } fetchResidential(viewBox(), "this view"); };
+$("osmCity").onclick = () => fetchResidential(HOUSTON_BBOX, "Houston");
+$("undo").onclick = undo;
+document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+$("togglePanel").onclick = () => document.body.classList.toggle("panel-closed");
+if (matchMedia("(max-width:720px)").matches) document.body.classList.add("panel-closed");
+const settings = () => ({source:state.source, offlineOnly:state.offlineOnly, saveBrowse:state.saveBrowse, maskOpacity:state.maskOpacity});
+function netStatus(){ const on = navigator.onLine; $("net").textContent = on ? "online" : "offline"; $("net").className = "pill " + (on?"ok":"bad"); }
+addEventListener("online", netStatus); addEventListener("offline", netStatus); netStatus();
+
+map.on("mousemove", e => { const z = map.getZoom(), mpp = 156543.034*Math.cos(e.latlng.lat*Math.PI/180)/2**z;
+  $("hud").textContent = `${e.latlng.lat.toFixed(5)}° N  ${(-e.latlng.lng).toFixed(5)}° W · z${z} · ${mpp<10?mpp.toFixed(2):mpp.toFixed(0)} m/px`; });
+map.on("moveend", () => { const c = map.getCenter(), z = map.getZoom(), mpp = 156543.034*Math.cos(c.lat*Math.PI/180)/2**z;
+  $("hud").textContent = `${c.lat.toFixed(5)}° N  ${(-c.lng).toFixed(5)}° W · z${z} · ${mpp<10?mpp.toFixed(2):mpp.toFixed(0)} m/px`; });
+map.fire("moveend");
+
+/* ---------- boot ---------- */
+if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.register("sw.js").catch(e => log(`App install unavailable: ${e.message}`));
+(async () => {
+  const s = await kvGet("settings").catch(()=>null) || {};
+  Object.assign(state, {offlineOnly:!!s.offlineOnly, saveBrowse:!!s.saveBrowse, maskOpacity: s.maskOpacity ?? 1});
+  $("offlineOnly").checked = state.offlineOnly; $("saveBrowse").checked = state.saveBrowse;
+  $("opacity").value = state.maskOpacity; $("opVal").textContent = Math.round(state.maskOpacity*100)+"%";
+  const src = SOURCES[s.source] ? s.source : "usgs"; $("source").value = src; setSource(src);
+  if (src!=="usgs") refreshStats("usgs");
+  const fc = await kvGet("mask").catch(()=>null); if (fc) mask.addData(fc);
+  state.deletedOsm = new Set(await kvGet("deletedOsm").catch(()=>null) || []);
+  mask.setStyle(maskStyle()); maskCount();
+  for (const o of (await kvGet("overlays").catch(()=>null) || [])) addOverlay(o);
+  map.attributionControl.addAttribution("Residential areas © OpenStreetMap contributors (ODbL)");
+  log(fc ? "Loaded your saved blackout" : "No blackout yet. Use Fetch for Houston to start.");
+})();
+</script>
+</body>
+</html>
