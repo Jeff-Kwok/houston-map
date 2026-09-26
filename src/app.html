@@ -220,7 +220,7 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
   <details>
     <summary>Offline imagery</summary>
     <button id="packGet" class="primary">Download this package</button>
-    <div class="stat" id="packInfo">Region: 100 mi (161 km) square, zoom 8–13, about 8,000 tiles / 125 MB. City: zoom 14–15, about 5,700 tiles / 164 MB.</div>
+    <div class="stat" id="packInfo">Region: zoom 8–13 over the package square. City: zoom 14–15 over the city core.</div>
     <label><input type="checkbox" id="packRegion14"> <span id="packRegion14Text">Add zoom 14 across the package</span></label>
     <label><input type="checkbox" id="packZ16"> <span id="packZ16Text">Add zoom 16 over the city core</span></label>
     <div class="bar"><i id="packBar"></i></div>
@@ -278,7 +278,7 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
 <div id="pkgScreen" hidden>
   <div class="pkg-card" role="dialog" aria-labelledby="pkgTitle">
     <div class="row pkg-head"><h2 id="pkgTitle">Choose a package</h2><button id="pkgClose">Close</button></div>
-    <p class="note">A package is a 322 km (200 mi) square, 161 km (100 mi) out from its centre. The map, grid and downloads stay inside the package you open.</p>
+    <p class="note">A package is a 161 km (100 mi) square, 80.5 km (50 mi) out from its centre. The map, grid and downloads stay inside the package you open.</p>
     <ul id="pkgList"></ul>
     <h2>New package</h2>
     <label class="stack">Name <input type="text" id="pkgNewName" placeholder="Dallas"></label>
@@ -296,7 +296,7 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
 <script>
 "use strict";
 const HOUSTON_BBOX = {s:29.52, w:-95.79, n:30.11, e:-95.01};
-const DOMAIN_BBOX = {s:28.310, w:-97.035, n:31.211, e:-93.704};   // square 161 km (100 statute mi) out from downtown
+const DOMAIN_BBOX = {s:29.035, w:-96.202, n:30.486, e:-94.537};   // square 80.5 km (50 statute mi) out from downtown
 const PACKS = [
   {id:"region", label:"Region", bbox:DOMAIN_BBOX, zmin:8, zmax:13},
   {id:"city", label:"City", bbox:HOUSTON_BBOX, zmin:14, zmax:15}];

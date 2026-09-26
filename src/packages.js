@@ -1,7 +1,7 @@
 "use strict";
-// Packages: a 100 statute mi (161 km) square around a centre. The open package bounds the map, the grid zone and downloads.
+// Packages: a square 80.5 km (50 statute mi) out around a centre. The open package bounds the map, the grid zone and downloads.
 const Packages = (() => {
-  const HALF_KM = 160.934;
+  const HALF_KM = 80.467;
   const HOUSTON = {id:"houston", name:"Houston", lat:29.7604, lon:-95.3698, builtin:true, core:HOUSTON_BBOX, prebuilt:true};
   let list = [HOUSTON], current = null;
   const squareAround = (lat, lon, halfKm) => { const dlat = halfKm/110.95, dlon = halfKm/(111.32*Math.cos(lat*Math.PI/180));
@@ -25,7 +25,7 @@ const Packages = (() => {
     for (const p of list){
       const li = document.createElement("li"); li.className = "pkg" + (p === current ? " cur" : "");
       li.innerHTML = `<div><b>${escapeHtml(p.name)}</b>${p === current ? ` <span class="pill ok">open</span>` : ""}
-          <div class="stat">${fmtLL(p.lat, p.lon)} · 322 km (200 mi) square</div>
+          <div class="stat">${fmtLL(p.lat, p.lon)} · 161 km (100 mi) square</div>
           <div class="note">${p.prebuilt ? "Prebuilt imagery packs available" : "Imagery downloads tile by tile"}</div></div>
         <div class="row"><button class="primary" data-act="open">Open</button>${p.builtin ? "" : `<button data-act="del">Delete</button>`}</div>`;
       li.querySelector('[data-act="open"]').onclick = () => open(p);
@@ -50,13 +50,13 @@ const Packages = (() => {
     if (!current) return;
     const b = bboxOf(current), core = coreOf(current);
     const n = (bb, a, z) => fmtN(countTiles(tileRanges(bb, a, z)));
-    $("packRegion14Text").textContent = `Add zoom 14 across the package (${n(b,14,14)} more tiles${current.prebuilt ? ", about 473 MB" : ""})`;
+    $("packRegion14Text").textContent = `Add zoom 14 across the package (${n(b,14,14)} more tiles)`;
     $("packZ16Text").textContent = `Add zoom 16 over the city core (${n(core,16,16)} more tiles${current.prebuilt ? ", about 507 MB" : ""})`;
     if (!current.prebuilt){ $("packInfo").textContent = `Zoom 8–13 over the whole square and 14–15 over the city core: ${n(b,8,13)} + ${n(core,14,15)} tiles.`; return; }
     Promise.all(PACKS.map(pk => fetch(`packs/${pk.id}/index.json`, {cache:"no-cache"}).then(r => r.ok ? r.json() : null).catch(() => null)))
       .then(ix => { $("packInfo").textContent = ix.every(Boolean)
         ? ix.map(i => `${i.name}: zoom ${i.zmin}–${i.zmax}, ${fmtN(i.tiles)} tiles, ${fmtBytes(i.bytes)}`).join(" · ")
-        : "Region: zoom 8–13, about 8,000 tiles / 125 MB. City: zoom 14–15, about 5,700 tiles / 164 MB."; });
+        : "Region: zoom 8–13 over the package square. City: zoom 14–15 over the city core."; });
   }
   let picking = false;
   function pickOnMap(){ picking = true; hide(); $("modeBanner").hidden = false; $("modeBannerText").textContent = "Tap the centre of the new package."; }

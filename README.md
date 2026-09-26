@@ -6,7 +6,7 @@ It installs as an app on phone and desktop and works offline.
 - **Imagery:** USGS The National Map orthoimagery (public domain, down to zoom 16) can be saved for
   offline use. Esri World Imagery is sharper (zoom 19) but view only.
 - **Houston packs:** prebuilt by `tools/pack.py` into a few chunk files so a device installs them in a
-  handful of requests. Region pack: the square 161 km (100 statute miles) out from downtown, zoom 8–13.
+  handful of requests. Region pack: the square 80.5 km (50 statute miles) out from downtown, zoom 8–13.
   City pack: the Houston box, zoom 14–15. The deploy workflow builds both and caches the tiles.
 - **Blackout:** OpenStreetMap `landuse=residential` areas (ODbL), fetched through Overpass, plus
   anything you draw, plus grid squares you mark as not of interest.

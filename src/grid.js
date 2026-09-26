@@ -1,7 +1,7 @@
 "use strict";
 // MGRS/UTM grid in the open package's zone: base squares, any square split N×N (nested), squares blacked out as "not of interest".
 const Grid = (() => {
-  let ZONE = 15, ZONE_W = -97.035, ZONE_E = -90;   // the zone is stretched to cover the whole package square
+  let ZONE = 15, ZONE_W = -96.202, ZONE_E = -90;   // the zone is stretched to cover the whole package square
   const g = {base:1000, splits:new Map(), black:new Set(), show:true, selected:null};
   const fmt = v => String(+v.toFixed(2));
   const cell = (size, e0, n0, zone = ZONE) => ({zone, size, e0, n0, id:`${zone}/${fmt(size)}/${fmt(e0)}/${fmt(n0)}`});
