@@ -4,7 +4,9 @@
 const Grid = (() => {
   let ZONE = 15, ZONE_W = -96.202, ZONE_E = -90;   // the zone is stretched to cover the whole package square
   const g = {base:1000, splits:new Map(), black:new Set(), show:true, focus:null, sel:new Map(), fmode:"select", seeThrough:false};
-  const SPLIT = 5;
+  const SPLIT = 5, MAX_DEPTH = 2;   // base → 1/5 → 1/25 (1 km → 200 m → 40 m)
+  const depthOf = c => Math.round(Math.log(g.base/c.size)/Math.log(SPLIT));
+  const canSplit = c => depthOf(c) < MAX_DEPTH;
   const fmt = v => String(+v.toFixed(2));
   const cell = (size, e0, n0, zone = ZONE) => ({zone, size, e0, n0, id:`${zone}/${fmt(size)}/${fmt(e0)}/${fmt(n0)}`});
   const parse = id => { const [zone, size, e0, n0] = id.split("/").map(Number); return {zone, size, e0, n0, id}; };
@@ -241,19 +243,21 @@ const Grid = (() => {
   function tools(){
     if (!g.focus) return;
     const sel = [...g.sel.values()], t = targets(), n = sel.length;
-    const splittable = t.filter(c => !g.splits.has(c.id)), splitNow = t.filter(c => g.splits.has(c.id));
+    const splittable = t.filter(c => !g.splits.has(c.id) && canSplit(c)), splitNow = t.filter(c => g.splits.has(c.id));
     const inside = [...g.black].filter(id => within(parse(id), g.focus)).length;
     $("focusSel").innerHTML = n === 0 ? "Nothing selected. Split applies to the whole square."
       : n === 1 ? `Selected <b>${ref(sel[0])}</b> · ${sizeText(sel[0].size)}${g.splits.has(sel[0].id) ? " · split 5×5" : ""}${g.black.has(sel[0].id) ? ` · <span class="pill bad">blacked out</span>` : ""}`
       : `<b>${fmtN(n)}</b> squares selected`;
-    $("fSplit").textContent = n > 1 ? `Split ${fmtN(splittable.length)} squares 5×5` : n === 1 ? "Split 5×5" : "Split whole square 5×5";
+    const smallest = n > 0 && t.every(c => !canSplit(c));
+    $("fSplit").textContent = smallest ? `Smallest size (${sizeText(g.base/SPLIT**MAX_DEPTH)})`
+      : n > 1 ? `Split ${fmtN(splittable.length)} squares 5×5` : n === 1 ? "Split 5×5" : "Split whole square 5×5";
     $("fSplit").disabled = splittable.length === 0;
     $("fUnsplit").disabled = splitNow.length === 0; $("fSelClear").disabled = n === 0;
     $("fAoi").textContent = n > 1 ? `Selected → ${fmtN(n)} areas` : "Selected → area";
     $("fClearAll").disabled = inside === 0; $("focusStats").textContent = `${fmtN(inside)} blacked-out squares in this square`;
   }
   const after = () => { save(); render(); tools(); };
-  $("fSplit").onclick = () => { const t = targets().filter(c => !g.splits.has(c.id)); if (!t.length) return;
+  $("fSplit").onclick = () => { const t = targets().filter(c => !g.splits.has(c.id) && canSplit(c)); if (!t.length) return;
     pushUndo(t.length > 1 ? `split ${t.length} squares` : "split square"); t.forEach(c => split(c, SPLIT)); g.sel.clear(); after(); };
   $("fUnsplit").onclick = () => { const t = targets().filter(c => g.splits.has(c.id)); if (!t.length) return;
     pushUndo("remove split"); t.forEach(unsplit); g.sel.clear(); after(); };
@@ -279,6 +283,8 @@ const Grid = (() => {
     const zoned = id => id.split("/").length === 4 ? id : `15/${id}`;
     if (s){ g.base = s.base || 1000; g.show = s.show !== false;
       g.splits = new Map((s.splits||[]).map(([id, f]) => [zoned(id), f])); g.black = new Set((s.black||[]).map(zoned)); }
+    const tooDeep = [...g.splits.keys()].map(parse).filter(c => c.size <= g.base && !canSplit(c)).sort((x, y) => x.size - y.size);
+    if (tooDeep.length){ tooDeep.forEach(c => { if (g.splits.has(c.id)) unsplit(c); }); save(); log(`Merged ${tooDeep.length} splits below the smallest square size`); }
     $("gridBase").value = String(g.base); $("showGrid").checked = g.show;
     $("gridBase").onchange = e => { g.base = +e.target.value; close(); save(); render(); };
     $("showGrid").onchange = e => { g.show = e.target.checked; save(); render(); };

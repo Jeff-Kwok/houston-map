@@ -12,7 +12,7 @@ It installs as an app on phone and desktop and works offline.
   anything you draw, plus grid squares you mark as not of interest.
 - **Grid:** MGRS squares in the package's UTM zone, 500 m to 10 km. The main map only shows the grid; tapping a
   square opens it in a focus pane. There you select squares (tap, or press and drag for several), split them 5×5
-  as many levels deep as needed, paint blackout, draw and reshape areas of interest, and see the square's places.
+  up to two levels (1 km → 200 m → 40 m), paint blackout, draw and reshape areas of interest, and see the square's places.
   Opening a square fetches its places and saves USGS NAIP 0.3 m imagery (zoom 17–19) for it, so it works offline.
 - **Areas of interest:** named shapes in your own categories, each category with a colour and opacity. They are
   drawn and reshaped in the focus pane; the side panel renames, recolours, sorts and deletes them.
