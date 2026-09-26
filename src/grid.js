@@ -85,12 +85,16 @@ const Grid = (() => {
         {renderer:view.fillR, stroke:false, fillColor:"#0b0f0d", fillOpacity:.62, interactive:false}));
     }
     if (!g.show && !focus) return;
-    const baseStyle = {renderer:view.lineR, color:"#ffffff", opacity:.6, weight:1, interactive:false};
-    const subStyle = {renderer:view.lineR, color:"#ffffff", opacity: focus ? .75 : .42, weight: focus ? 1.2 : .8, interactive:false};
+    // Overview lines are bold white over a dark halo so they read on bright ground as well as dark.
+    const haloStyle = {renderer:view.lineR, color:"#000000", opacity:.45, weight:4, interactive:false};
+    const baseStyle = {renderer:view.lineR, color:"#ffffff", opacity:.9, weight:2, interactive:false};
+    const subStyle = {renderer:view.lineR, color:"#ffffff", opacity: focus ? .75 : .6, weight: focus ? 1.2 : 1.2, interactive:false};
     const s = g.base;
     if (!focus && s*ppm >= 24){
-      for (let e = Math.floor(v.e0/s)*s; e <= v.e1; e += s) segment(view, e, v.n0, e, v.n1, baseStyle);
-      for (let n = Math.floor(v.n0/s)*s; n <= v.n1; n += s) segment(view, v.e0, n, v.e1, n, baseStyle);
+      for (const st of [haloStyle, baseStyle]){
+        for (let e = Math.floor(v.e0/s)*s; e <= v.e1; e += s) segment(view, e, v.n0, e, v.n1, st);
+        for (let n = Math.floor(v.n0/s)*s; n <= v.n1; n += s) segment(view, v.e0, n, v.e1, n, st);
+      }
     }
     for (const [id, f] of g.splits){
       const c = parse(id); if (!keep(c)) continue;
