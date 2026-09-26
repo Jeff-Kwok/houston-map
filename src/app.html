@@ -71,6 +71,22 @@ label{display:flex;gap:6px;align-items:center}
 #modeBanner button{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;padding:4px 10px}
 .pkgbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .pkgbar button{padding:3px 8px;font-size:12.5px}
+#focus{position:fixed;inset:0;z-index:1900;background:rgba(8,12,10,.62);display:grid;place-items:center;padding:16px}
+#focus[hidden]{display:none}
+.focus-card{background:var(--panel);color:var(--ink);border-radius:10px;width:min(1180px,100%);height:min(860px,100%);display:flex;flex-direction:column;
+  box-shadow:0 10px 40px rgba(0,0,0,.45);overflow:hidden}
+.focus-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.focus-head h2{font:600 16px/1.2 var(--mono);letter-spacing:.02em;color:var(--ink);text-transform:none}
+.focus-body{flex:1;display:flex;min-height:0}
+#focusMap{flex:1;min-width:0;background:#000}
+.focus-tools{width:300px;flex:none;padding:14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;border-left:1px solid var(--line)}
+@media (max-width:720px){
+  #focus{padding:0}
+  .focus-card{border-radius:0;height:100%}
+  .focus-head{padding-top:calc(10px + env(safe-area-inset-top,0px))}
+  .focus-body{flex-direction:column}
+  .focus-tools{width:auto;max-height:44%;border-left:0;border-top:1px solid var(--line);padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+}
 #pkgScreen{position:fixed;inset:0;z-index:2000;background:rgba(8,12,10,.62);display:grid;place-items:center;padding:16px}
 #pkgScreen[hidden]{display:none}
 .pkg-card{background:var(--panel);color:var(--ink);border-radius:10px;padding:18px;width:min(520px,100%);max-height:calc(100% - 32px);overflow-y:auto;
@@ -186,14 +202,10 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
         <option value="10000">10 km</option><option value="5000">5 km</option><option value="2000">2 km</option>
         <option value="1000">1 km</option><option value="500">500 m</option></select></label>
     </div>
-    <div class="tools two" role="group" aria-label="Grid tools">
-      <button data-mode="gpick" aria-pressed="false">Pick square</button>
-      <button data-mode="gblack" aria-pressed="false">Black out squares</button>
-    </div>
-    <div id="gridSel" class="card"></div>
+    <p class="note"><b>Tap a square on the map to open it.</b> Splitting and blacking out happen in that focus view; the main map only shows the result.</p>
     <div class="stat" id="gridStats"></div>
     <p class="note" id="gridNote"></p>
-    <p class="note">Squares follow the MGRS grid in the package's UTM zone. Pick a square to split it into smaller squares, then tap or drag across squares to black them out as not of interest.</p>
+    <p class="note">Squares follow the MGRS grid in the package's UTM zone.</p>
   </details>
 
   <details>
@@ -275,6 +287,32 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
 <div id="map"></div>
 <div id="hud">—</div>
 <div id="modeBanner" hidden><span id="modeBannerText"></span><button id="modeDone">Done</button></div>
+<div id="focus" hidden>
+  <div class="focus-card" role="dialog" aria-labelledby="focusTitle">
+    <div class="focus-head">
+      <div><h2 id="focusTitle">Square</h2><div class="stat" id="focusSub"></div></div>
+      <button id="focusClose">Close</button>
+    </div>
+    <div class="focus-body">
+      <div id="focusMap"></div>
+      <div class="focus-tools">
+        <div class="tools two" role="group" aria-label="Focus tools">
+          <button data-fmode="select" aria-pressed="true">Select</button>
+          <button data-fmode="paint" aria-pressed="false">Black out</button>
+        </div>
+        <p class="note" id="focusHint"></p>
+        <div class="stat" id="focusSel"></div>
+        <div class="row"><label>Split into <select id="fSplitN">
+          <option value="2">2×2</option><option value="3">3×3</option><option value="4">4×4</option><option value="5">5×5</option><option value="10" selected>10×10</option></select></label>
+          <button id="fSplit">Split</button><button id="fUnsplit">Remove split</button></div>
+        <div class="row"><button id="fBlack">Black out selected</button><button id="fClearAll">Clear this square</button></div>
+        <div class="row"><button id="fAoi">Make area of interest</button><button id="fUndo">Undo</button></div>
+        <label><input type="checkbox" id="fSee"> See through blackout</label>
+        <div class="stat" id="focusStats"></div>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="pkgScreen" hidden>
   <div class="pkg-card" role="dialog" aria-labelledby="pkgTitle">
     <div class="row pkg-head"><h2 id="pkgTitle">Choose a package</h2><button id="pkgClose">Close</button></div>
@@ -376,12 +414,17 @@ function applyDomainLock(){
   map.setMinZoom(state.domainLock ? 8 : 3);
   setSource(state.source);
 }
+function baseLayerFor(key, bounds){
+  const s = SOURCES[key];
+  const layer = new OfflineTiles(s.url, {sourceKey:key, maxNativeZoom:s.maxNative, maxZoom:19, attribution:s.attr,
+    keepBuffer:4, updateWhenZooming:false, bounds});
+  layer.on("tileunload", e => { if (e.tile.src.startsWith("blob:")) URL.revokeObjectURL(e.tile.src); });
+  return layer;
+}
 function setSource(key){
   state.source = key; const s = SOURCES[key];
   if (base) map.removeLayer(base);
-  base = new OfflineTiles(s.url, {sourceKey:key, maxNativeZoom:s.maxNative, maxZoom:19, attribution:s.attr,
-    keepBuffer:4, updateWhenZooming:false, bounds: state.domainLock ? domainBounds() : undefined});
-  base.on("tileunload", e => { if (e.tile.src.startsWith("blob:")) URL.revokeObjectURL(e.tile.src); });
+  base = baseLayerFor(key, state.domainLock ? domainBounds() : undefined);
   base.addTo(map); base.bringToBack();
   $("sourceNote").textContent = s.note;
   $("saveBrowse").disabled = !s.canStore;
@@ -614,13 +657,12 @@ const MODE_TEXT = {poly:"Draw: click corners, click the first corner to finish."
   cut:"Cut out: draw a shape to open a hole in the blackout.", erase:"Erase: click a black shape to remove it.",
   edit:"Reshape: click a black shape, then drag its corners.", area:"Draw the area to save offline.",
   aoiPoly:"Draw area: click corners, click the first corner to finish.", aoiRect:"Box area: click two opposite corners.",
-  gpick:"Pick square: tap a grid square.", gblack:"Black out squares: tap or drag across squares. Pan to move the map."};
+};
 function stopEditing(){ if (editing){ editing.pm.disable(); editing.setStyle(maskStyle()); editing = null; saveMask(); } }
 function setMode(m){
   map.pm.disableDraw(); if (map.pm.globalCutModeEnabled()) map.pm.disableGlobalCutMode(); stopEditing(); Aoi.stopReshape();
   if (state.mode === m && m !== "pan") m = "pan";
   state.mode = m;
-  m === "gblack" ? map.dragging.disable() : map.dragging.enable();
   document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode===m));
   $("modeBanner").hidden = !MODE_TEXT[m]; $("modeBannerText").textContent = MODE_TEXT[m] || "";
   const opts = {snappable:false, continueDrawing:true, pathOptions:{color:"#f5b301", weight:2, fillColor:"#000", fillOpacity:.6}};

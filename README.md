@@ -10,7 +10,8 @@ It installs as an app on phone and desktop and works offline.
   City pack: the Houston box, zoom 14–15. The deploy workflow builds both and caches the tiles.
 - **Blackout:** OpenStreetMap `landuse=residential` areas (ODbL), fetched through Overpass, plus
   anything you draw, plus grid squares you mark as not of interest.
-- **Grid:** MGRS squares (UTM zone 15), 500 m to 10 km, any square split N×N as many levels deep as needed.
+- **Grid:** MGRS squares in the package's UTM zone, 500 m to 10 km. The main map only shows the grid; tapping a
+  square opens it in a focus pane, where it is split N×N (as many levels deep as needed) and parts are blacked out.
 - **Areas of interest:** named shapes in your own categories, each category with a colour and opacity.
 - **Places:** OSM place pips by category, city/town/neighborhood labels, and search.
 

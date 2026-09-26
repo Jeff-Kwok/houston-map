@@ -144,7 +144,7 @@ const Aoi = (() => {
   }
   map.on("zoomend", () => map.getContainer().classList.toggle("z-lo", map.getZoom() < 12));
   map.on("click", () => { if (state.mode === "pan" && a.selected){ a.selected = null; redrawAll(); renderPanel(); } });
-  return {init, created, addArea, exportGeoJSON, importGeoJSON, stopReshape,
+  return {init, created, addArea, selectedId:() => a.selected, exportGeoJSON, importGeoJSON, stopReshape,
     snapshot:() => JSON.parse(JSON.stringify({cats:a.cats, areas:a.areas})),
     restore:s => { stopReshape(); a.cats = s.cats; a.areas = s.areas; [...layers.values()].forEach(l => group.removeLayer(l)); layers.clear(); redrawAll(); renderPanel(); save(); }};
 })();

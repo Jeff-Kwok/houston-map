@@ -71,6 +71,6 @@ const Packages = (() => {
     if (p) open(p, false); else { render(); $("pkgClose").hidden = true; show(); }
   }
   const cancelPick = () => { if (picking){ picking = false; show(); } };
-  return {init, cancelPick, current:() => current, bbox:() => current ? bboxOf(current) : bboxOf(HOUSTON), core:() => current ? coreOf(current) : HOUSTON_BBOX,
+  return {init, cancelPick, isPicking:() => picking, current:() => current, bbox:() => current ? bboxOf(current) : bboxOf(HOUSTON), core:() => current ? coreOf(current) : HOUSTON_BBOX,
     prebuilt:() => !current || !!current.prebuilt, show};
 })();

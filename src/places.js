@@ -79,7 +79,7 @@ const Places = (() => {
         for (const x of p.bins.get(`${la}:${lo}`) || []) if (!p.off.has(x.g) && b.contains([x.a, x.o])) found.push(x);
     found.sort((u, v) => GROUPS.findIndex(g => g.id === u.g) - GROUPS.findIndex(g => g.id === v.g));
     found.slice(0, 3000).forEach(x => {
-      const m = L.circleMarker([x.a, x.o], {renderer:poiR, radius:r, color:"#ffffff", weight:1.5, fillColor:GROUP[x.g].color, fillOpacity:1});
+      const m = L.circleMarker([x.a, x.o], {renderer:poiR, radius:r, color:"#ffffff", weight:1.5, fillColor:GROUP[x.g].color, fillOpacity:1, bubblingMouseEvents:false});
       m.bindPopup(() => popupHtml(x), {maxWidth:260}); pips.addLayer(m);
     });
     if (z >= 17) found.slice(0, 250).forEach(x => labels.addLayer(L.marker([x.a, x.o], {pane:"labels", interactive:false, keyboard:false,
