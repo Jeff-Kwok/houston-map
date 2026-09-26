@@ -16,7 +16,9 @@ It installs as an app on phone and desktop and works offline.
   Opening a square fetches its places and saves USGS NAIP 0.3 m imagery (zoom 17–19) for it, so it works offline.
 - **Areas of interest:** named shapes in your own categories, each category with a colour and opacity. They are
   drawn and reshaped in the focus pane; the side panel renames, recolours, sorts and deletes them.
-- **Places:** OSM place pips by category, city/town/neighborhood labels, and search.
+- **Places:** pips by category from OpenStreetMap (ODbL) plus Overture Maps places (CDLA-Permissive-2.0).
+  `tools/places_pack.py` splits Overture places for the package square into 0.05° cell files (confidence ≥ 0.7,
+  categorised, not closed); a focus square loads only the cells it touches. City/town/neighborhood labels and search.
 
 Everything you make stays in the browser on each device; export and import GeoJSON to move it.
 

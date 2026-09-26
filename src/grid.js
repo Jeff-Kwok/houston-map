@@ -18,17 +18,19 @@ const Grid = (() => {
   const ref = c => UTM.mgrs(c.e0 + 1e-6, c.n0 + 1e-6, c.zone, toLL(c.e0, c.n0, c.zone)[0], digitsFor(c.size));
   const sizeText = s => s >= 1000 ? `${+(s/1000).toFixed(2)} km` : `${+s.toFixed(1)} m`;
 
-  function cellAt(ll){
+  // Squares from the base square down to the smallest split square under ll.
+  function chainAt(ll){
     const p = toUtm(ll);
-    let c = cell(g.base, Math.floor(p.e/g.base)*g.base, Math.floor(p.n/g.base)*g.base);
+    const chain = [cell(g.base, Math.floor(p.e/g.base)*g.base, Math.floor(p.n/g.base)*g.base)];
     for (let depth = 0; depth < 12; depth++){
-      const f = g.splits.get(c.id); if (!f) break;
+      const c = chain.at(-1), f = g.splits.get(c.id); if (!f) break;
       const s = c.size/f;
       const i = Math.min(f-1, Math.max(0, Math.floor((p.e-c.e0)/s))), j = Math.min(f-1, Math.max(0, Math.floor((p.n-c.n0)/s)));
-      c = cell(s, c.e0+i*s, c.n0+j*s, c.zone);
+      chain.push(cell(s, c.e0+i*s, c.n0+j*s, c.zone));
     }
-    return c;
+    return chain;
   }
+  const cellAt = ll => chainAt(ll).at(-1);
   function children(c){
     const f = g.splits.get(c.id); if (!f) return [];
     const s = c.size/f, out = [];
@@ -142,14 +144,19 @@ const Grid = (() => {
   map.on("moveend", render);
 
   /* ---------- focus pane ---------- */
-  let fmap = null, fview = null, fbase = null, fcontext = null, fsource = null, fnaip = null, fplaces = null, ftoken = null;
+  let fmap = null, fview = null, fbase = null, fcontext = null, fsource = null, fnaip = null, fplaces = null, flabels = null, ftoken = null;
+  let shownPlaces = [];
+  const relabel = () => { const n = Places.labelOn(fmap, flabels, shownPlaces, "fpoiLabels");
+    $("fLabelNote").textContent = shownPlaces.length > n ? `Names shown for ${fmtN(n)} of ${fmtN(shownPlaces.length)} places; zoom in for more.` : ""; };
   function ensureFocusMap(){
     if (fmap) return;
     fmap = L.map("focusMap", {zoomControl:true, attributionControl:false, maxZoom:19, zoomSnap:0.25, boxZoom:false, doubleClickZoom:false});
     fview = makeView(fmap, "focus");
-    fnaip = naipLayer().addTo(fmap); fplaces = L.layerGroup().addTo(fmap);
+    fnaip = naipLayer().addTo(fmap); fplaces = L.layerGroup().addTo(fmap); flabels = L.layerGroup().addTo(fmap);
+    { const el = fmap.createPane("fpoiLabels"); el.style.zIndex = 645; el.style.pointerEvents = "none"; }
+    fmap.on("moveend", () => g.focus && relabel());
     fmap.on("pm:create", e => { if (g.fmode === "aoiPoly" || g.fmode === "aoiRect"){ Aoi.focusCreated(e.layer); setFMode("select"); } });
-    fmap.on("zoomend", () => { $("fZoomNote").textContent = fmap.getZoom() > 16 ? "Showing NAIP 0.3 m imagery" : "Zoom in past 16 for NAIP 0.3 m detail"; });
+    fmap.on("zoomend", zoomNote);
     fmap.on("moveend", () => g.focus && draw(fview, g.focus));
     const el = fmap.getContainer(); let painting = null, selecting = null;
     const pick = c => { if (!within(c, g.focus) || selecting.seen.has(c.id)) return; selecting.seen.add(c.id); g.sel.set(c.id, c); scheduleRender(); };
@@ -162,6 +169,14 @@ const Grid = (() => {
     });
     el.addEventListener("pointermove", e => { if (selecting && e.pointerId === selecting.pid) pick(cellAt(fmap.mouseEventToLatLng(e))); });
     const endSel = () => { if (!selecting) return; selecting = null; render(); tools(); };
+    // Double-click selects the square one level up: the whole 5×5 block the clicked square belongs to.
+    el.addEventListener("dblclick", e => {
+      if (g.fmode !== "select" || e.target.closest(".leaflet-control, .leaflet-popup")) return;
+      const chain = chainAt(fmap.mouseEventToLatLng(e)), up = chain.length > 1 ? chain.at(-2) : chain[0];
+      if (!within(up, g.focus)) return;
+      if (!(e.shiftKey || e.ctrlKey || e.metaKey)) g.sel.clear();
+      g.sel.set(up.id, up); render(); tools();
+    });
     el.addEventListener("pointerup", endSel); el.addEventListener("pointercancel", endSel);
     const paint = c => { if (!within(c, g.focus) || painting.seen.has(c.id)) return; painting.seen.add(c.id);
       if (painting.val){ dropSubtree(c); g.black.add(c.id); } else g.black.delete(c.id); scheduleRender(); };
@@ -181,9 +196,25 @@ const Grid = (() => {
     const style = {stroke:false, fill:true, fillColor:"#000", fillOpacity: g.seeThrough ? Math.min(state.maskOpacity, .5) : state.maskOpacity, interactive:false};
     mask.eachLayer(l => { if (l.getBounds().intersects(b)) fcontext.addLayer(L.polygon(l.getLatLngs(), {...style, pmIgnore:true})); });
   }
+  let fesri = null;
+  const zoomNote = () => { const z = fmap.getZoom(), esri = fesri && fmap.hasLayer(fesri) && z >= 17;
+    $("fZoomNote").textContent = esri ? `Showing Esri World Imagery (online) · zoom ${z.toFixed(1)}`
+      : z >= NAIP.zmin - 0.5 ? `Showing NAIP 0.6 m aerial imagery · zoom ${z.toFixed(1)}${z > 18 ? " (enlarged past its detail)" : ""}`
+      : "Zoom in for NAIP 0.6 m detail"; };
+  function esriToggle(on){
+    if (!fmap) return;
+    if (!fesri){ const s = SOURCES.esri; fesri = L.tileLayer(s.url, {minZoom:17, maxZoom:19, maxNativeZoom:s.maxNative, keepBuffer:2}); }
+    on && navigator.onLine ? fesri.addTo(fmap) : fesri.remove(); zoomNote();
+    kvPut("focusEsri", !!on).catch(()=>{});
+  }
+  let flist = [];
   function placesList(list){
+    if (list) flist = list;
+    const q = $("fPlacesFilter").value.trim().toLowerCase();
+    list = q ? flist.filter(x => x.n.toLowerCase().includes(q) || x.k.replace(/_/g, " ").includes(q)) : flist;
+    shownPlaces = list; relabel();
     const counts = {}; list.forEach(x => counts[x.g] = (counts[x.g] || 0) + 1);
-    $("fPlacesStats").textContent = list.length ? Places.groups.filter(gr => counts[gr.id]).map(gr => `${gr.label} ${counts[gr.id]}`).join(" · ") : "No saved places in this square.";
+    $("fPlacesStats").textContent = list.length ? `${fmtN(list.length)} places: ` + Places.groups.filter(gr => counts[gr.id]).map(gr => `${gr.label} ${counts[gr.id]}`).join(" · ") : "No saved places in this square.";
     const ul = $("fPlaces"); ul.textContent = "";
     for (const x of list.slice().sort((u, w) => u.n.localeCompare(w.n)).slice(0, 300)){
       const gr = Places.groups.find(q => q.id === x.g), li = document.createElement("li"), btn = document.createElement("button");
@@ -196,6 +227,12 @@ const Grid = (() => {
   async function focusPlaces(c, fetchIfNew){
     const b = L.latLngBounds(corners(c));
     placesList(Places.drawOn(fmap, fplaces, b));
+    if (fetchIfNew && navigator.onLine){
+      $("fPlacesMsg").textContent = "Loading places for this square…";
+      await Places.loadOverture(b);
+      if (g.focus?.id !== c.id) return;
+      $("fPlacesMsg").textContent = ""; placesList(Places.drawOn(fmap, fplaces, b));
+    }
     if (!fetchIfNew || !navigator.onLine || await Places.squareFetched(c.id)) return;
     $("fPlacesMsg").textContent = "Fetching places for this square…";
     const ok = await Places.fetchSquare(c.id, b);
@@ -209,7 +246,7 @@ const Grid = (() => {
     if (zmax < NAIP.zmin){ $("fHiRes").textContent = "This square is too big to save in full detail at once. Tiles you look at are still saved."; return; }
     if (!navigator.onLine){ $("fHiRes").textContent = "Offline: showing the detail already saved for this square."; return; }
     const token = ftoken = {}, ranges = tileRanges(bb, NAIP.zmin, zmax);
-    const res = await saveTiles("naip", NAIP.url, ranges, pr => { if (ftoken === token)
+    const res = await saveTiles(NAIP.key, NAIP.url, ranges, pr => { if (ftoken === token)
       $("fHiRes").textContent = `High detail, zoom ${NAIP.zmin}–${zmax}: ${fmtN(pr.done)} of ${fmtN(pr.total)} tiles ready · ${fmtN(pr.saved)} new, ${fmtBytes(pr.bytes)}`; }, 4, () => ftoken !== token);
     if (ftoken === token){ $("fHiRes").textContent = `High detail, zoom ${NAIP.zmin}–${zmax}: ${fmtN(res.done - res.failed)} of ${fmtN(res.total)} tiles saved for offline`
         + (res.saved ? ` · ${fmtBytes(res.bytes)} new` : "") + (res.failed ? ` · ${res.failed} failed` : "");
@@ -224,14 +261,15 @@ const Grid = (() => {
     fmap.fitBounds(b, {padding:[16,16], animate:false});
     fmap.setMinZoom(fmap.getZoom()); fmap.setMaxBounds(b.pad(0.15));
     context(b); setFMode("select"); draw(fview, c); tools();
-    Aoi.focusOpen(fmap, b); $("fPlacesMsg").textContent = ""; focusPlaces(c, true); hiRes(c, false);
-    $("fZoomNote").textContent = "Zoom in past 16 for NAIP 0.3 m detail";
+    Aoi.focusOpen(fmap, b); $("fPlacesMsg").textContent = ""; $("fPlacesFilter").value = ""; focusPlaces(c, true); hiRes(c, false);
+    kvGet("focusEsri").then(v => { $("fEsri").checked = !!v; esriToggle(!!v); }).catch(()=>{});
+    zoomNote();
     $("focusTitle").textContent = ref(c); $("focusSub").textContent = `${sizeText(c.size)} square · grid ${ref(c).slice(0, 3)}`;
   }
   function close(){ if (!g.focus) return; ftoken = null; Aoi.focusClose(); if (fmap) fmap.pm.disableDraw();
     g.focus = null; g.sel.clear(); $("focus").hidden = true; render(); }
   const HINTS = {paint:"Tap or drag across squares to black them out. Tap a black square to clear it.",
-    select:"Tap a square to select it, or press and drag across several. Then split them 5×5.",
+    select:"Tap a square to select it, press and drag across several, or double-click to select its whole 5×5 block.",
     move:"Drag to move the map. Scroll or pinch to zoom.",
     aoiPoly:"Click the corners of the area, then click the first corner to finish.", aoiRect:"Click two opposite corners of the area."};
   function setFMode(m){
@@ -257,7 +295,7 @@ const Grid = (() => {
       : n > 1 ? `Split ${fmtN(splittable.length)} squares 5×5` : n === 1 ? "Split 5×5" : "Split whole square 5×5";
     $("fSplit").disabled = splittable.length === 0;
     $("fUnsplit").disabled = splitNow.length === 0; $("fSelClear").disabled = n === 0;
-    $("fAoi").textContent = n > 1 ? `Selected → ${fmtN(n)} areas` : "Selected → area";
+    $("fAoi").textContent = n > 1 ? `Selected ${fmtN(n)} → one area` : "Selected → area";
     $("fClearAll").disabled = inside === 0; $("focusStats").textContent = `${fmtN(inside)} blacked-out squares in this square`;
   }
   const after = () => { save(); render(); tools(); };
@@ -267,13 +305,19 @@ const Grid = (() => {
     pushUndo("remove split"); t.forEach(unsplit); g.sel.clear(); after(); };
   $("fSelClear").onclick = () => { g.sel.clear(); render(); tools(); };
   $("fClearAll").onclick = () => { pushUndo("clear square"); clearBlack(g.focus); after(); };
-  $("fAoi").onclick = () => { const t = targets(); t.forEach(c => Aoi.addArea(ref(c), {type:"Polygon", coordinates:[ring(c)]}, null, true));
-    log(t.length > 1 ? `Added ${t.length} areas of interest` : `Added area of interest ${ref(t[0])}`); };
+  $("fAoi").onclick = () => {
+    const t = targets(), zone = t[0].zone;
+    const geometry = cellUnion(t, (e, n) => { const [la, lo] = toLL(e, n, zone); return [lo, la]; });
+    const name = t.length > 1 ? `${ref(t[0])} +${t.length - 1}` : ref(t[0]);
+    Aoi.addArea(name, geometry, null, true); g.sel.clear(); render(); tools();
+    log(t.length > 1 ? `Added one area of interest from ${t.length} squares` : `Added area of interest ${name}`); };
   $("fAoiCat").onchange = e => Aoi.setCurrent(e.target.value);
   $("fPlacesRefresh").onclick = async () => { if (!g.focus) return; const c = g.focus; $("fPlacesMsg").textContent = "Fetching places for this square…";
     const ok = await Places.fetchSquare(c.id, L.latLngBounds(corners(c))); if (g.focus?.id !== c.id) return;
     $("fPlacesMsg").textContent = ok ? "" : "Some places could not be fetched. Try again."; focusPlaces(c, false); };
   $("fHiResGet").onclick = () => g.focus && hiRes(g.focus, true);
+  $("fPlacesFilter").oninput = () => placesList();
+  $("fEsri").onchange = e => esriToggle(e.target.checked);
   $("fSee").onchange = e => { g.seeThrough = e.target.checked; context(L.latLngBounds(corners(g.focus))); draw(fview, g.focus); };
   $("fUndo").onclick = () => { undo(); if (g.focus){ context(L.latLngBounds(corners(g.focus))); tools(); } };
   $("focusClose").onclick = close;

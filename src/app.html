@@ -145,7 +145,7 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
 .plbl-suburb span{font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.12em;color:#e6ece9}
 .plbl-hood span{font:500 11.5px/1 var(--sans);letter-spacing:.04em;color:#dfe6e3}
 .glbl span{font:500 10.5px/1 var(--mono);transform:translate(4px,4px);color:#fff;opacity:.85}
-.poilbl span{font:600 11.5px/1 var(--sans);transform:translate(9px,-50%);color:#fff!important}
+.poilbl span{font:600 11px/1 var(--sans);transform:translate(9px,-50%);color:#fff}
 .aoi-label{background:rgba(10,14,12,.72);color:#fff;border:0;box-shadow:none;font:600 12px/1.2 var(--sans);padding:2px 6px}
 .aoi-label::before{display:none}
 .z-lo .aoi-label{display:none}
@@ -174,7 +174,7 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
     <summary>Places and names</summary>
     <label><input type="checkbox" id="showCities"> City and town names</label>
     <label><input type="checkbox" id="showHoods"> Neighborhood names</label>
-    <label><input type="checkbox" id="showPois"> Place pips (from zoom 14)</label>
+    <label><input type="checkbox" id="showPois"> Place pips (from zoom 15)</label>
     <div id="poiGroups" class="groups"></div>
     <div class="row">
       <button id="poiView">Fetch places for this view</button>
@@ -322,10 +322,13 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
         <h3>Places in this square</h3>
         <div class="row"><button id="fPlacesRefresh">Refresh places</button><span class="note" id="fPlacesMsg"></span></div>
         <div class="stat" id="fPlacesStats"></div>
+        <input type="search" id="fPlacesFilter" placeholder="Filter places by name or type" aria-label="Filter places">
+        <div class="note" id="fLabelNote"></div>
         <ul id="fPlaces" class="fplaces"></ul>
 
         <h3>Imagery</h3>
         <div class="stat" id="fZoomNote"></div>
+        <label><input type="checkbox" id="fEsri"> Sharper close-up from Esri World Imagery (online only, not saved)</label>
         <div class="stat" id="fHiRes"></div>
         <button id="fHiResGet">Save full detail for this square</button>
       </div>
@@ -369,11 +372,12 @@ const SOURCES = {
     note:"Sharper, to zoom 19, but Esri's terms restrict bulk downloads, so this source is view only. Offline saving uses USGS."}
 };
 const MAX_TILES = 150000;
-// NAIP 0.3 m aerial imagery (public domain) rendered per Web Mercator tile; used above zoom 16 in the focus view.
-const NAIP = {name:"USGS NAIP 0.3 m", attr:"Imagery: USGS NAIP, The National Map", zmin:17, zmax:19,
+// NAIP aerial imagery (public domain) rendered per Web Mercator tile at 512 px, so a zoom-z tile carries zoom z+1
+// detail. Texas NAIP is 0.6 m, which zoom-17 tiles already reach; the focus view enlarges them above that.
+const NAIP = {key:"naip512", name:"USGS NAIP 0.6 m", attr:"Imagery: USGS NAIP, The National Map", zmin:14, zmax:17,
   url:(z, x, y) => { const r = 2*20037508.342789/2**z, x0 = -20037508.342789 + x*r, y1 = 20037508.342789 - y*r;
-    return `https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?bbox=${x0},${y1-r},${x0+r},${y1}&bboxSR=3857&imageSR=3857&size=256,256&format=jpg&f=image`; }};
-SOURCES.naip = {name:NAIP.name, maxNative:NAIP.zmax, canStore:true, attr:NAIP.attr, url:""};
+    return `https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?bbox=${x0},${y1-r},${x0+r},${y1}&bboxSR=3857&imageSR=3857&size=512,512&format=jpg&f=image`; }};
+SOURCES[NAIP.key] = {name:NAIP.name, maxNative:NAIP.zmax, canStore:true, attr:NAIP.attr, url:""};
 const $ = id => document.getElementById(id);
 const log = msg => { const el=$("log"); el.textContent = `${new Date().toLocaleTimeString()}  ${msg}\n` + el.textContent; };
 const fmtBytes = b => b>=1e9?(b/1e9).toFixed(2)+" GB":b>=1e6?(b/1e6).toFixed(1)+" MB":(b/1e3).toFixed(0)+" kB";
@@ -432,14 +436,19 @@ const OfflineTiles = L.TileLayer.extend({
   }
 });
 const NaipTiles = OfflineTiles.extend({ getTileUrl(c){ return NAIP.url(c.z, c.x, c.y); } });
-const naipLayer = () => { const l = new NaipTiles("", {sourceKey:"naip", minZoom:NAIP.zmin, maxZoom:NAIP.zmax, maxNativeZoom:NAIP.zmax, alwaysStore:true, keepBuffer:2});
+const naipLayer = () => { const l = new NaipTiles("", {sourceKey:NAIP.key, minZoom:NAIP.zmin, maxZoom:19, maxNativeZoom:NAIP.zmax, alwaysStore:true, keepBuffer:2});
   l.on("tileunload", e => { if (e.tile.src.startsWith("blob:")) URL.revokeObjectURL(e.tile.src); }); return l; };
 async function saveTiles(sourceKey, urlOf, ranges, onProgress, workers = 4, cancelled = () => false){
   const it = tileIter(ranges), total = countTiles(ranges); let done = 0, saved = 0, bytes = 0, failed = 0;
   const one = async () => { for (let n = it.next(); !n.done && !cancelled(); n = it.next()){
     const t = n.value, key = `${sourceKey}/${t.z}/${t.x}/${t.y}`;
-    try { if (await tileHas(key) === undefined){ const r = await fetch(urlOf(t.z, t.x, t.y));
-      if (r.ok){ const b = await r.blob(); await tilePut(key, b); saved++; bytes += b.size; } else failed++; } }
+    try { if (await tileHas(key) === undefined){
+      let b = null;
+      for (let i = 0; i < 3 && !b; i++){
+        try { const r = await fetch(urlOf(t.z, t.x, t.y)); if (r.ok) b = await r.blob(); else if (r.status === 404) break; } catch {}
+        if (!b) await new Promise(res => setTimeout(res, 1000*(i+1)));
+      }
+      if (b){ await tilePut(key, b); saved++; bytes += b.size; } else failed++; } }
     catch { failed++; }
     done++; onProgress({done, total, saved, bytes, failed}); } };
   await Promise.all(Array.from({length:workers}, one));
@@ -823,6 +832,7 @@ map.on("mousemove", e => hud(e.latlng));
 map.on("moveend", () => hud(map.getCenter()));
 
 </script>
+<script>/*INLINE:src/cellunion.js*/</script>
 <script>/*INLINE:src/grid.js*/</script>
 <script>/*INLINE:src/aoi.js*/</script>
 <script>/*INLINE:src/places.js*/</script>
@@ -843,7 +853,9 @@ if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.reg
   state.deletedOsm = new Set(await kvGet("deletedOsm").catch(()=>null) || []);
   mask.setStyle(maskStyle()); maskCount();
   for (const o of (await kvGet("overlays").catch(()=>null) || [])) addOverlay(o);
-  map.attributionControl.addAttribution("Places and residential areas © OpenStreetMap contributors (ODbL)");
+  map.attributionControl.addAttribution("Places and residential areas © OpenStreetMap contributors (ODbL) · Places: Overture Maps Foundation (CDLA-Permissive-2.0)");
+  idb("tiles","readwrite", s => s.delete(IDBKeyRange.bound("naip/", "naip/\uffff"))).catch(()=>{});   // 256 px NAIP tiles from an earlier build
+  idb("tiles","readwrite", s => s.delete(IDBKeyRange.bound("naip512/18/", "naip512/18/\uffff"))).catch(()=>{});   // zoom-18 NAIP holds no extra detail
   await Grid.init(); await Aoi.init(); hud(map.getCenter());
   Promise.all(PACKS.map(pk => fetch(`packs/${pk.id}/index.json`, {cache:"no-cache"}).then(r => r.ok ? r.json() : null).catch(() => null)))
     .then(ix => { if (ix.every(Boolean)) $("packInfo").textContent = ix.map(i => `${i.name}: zoom ${i.zmin}–${i.zmax}, ${fmtN(i.tiles)} tiles, ${fmtBytes(i.bytes)}`).join(" · "); });

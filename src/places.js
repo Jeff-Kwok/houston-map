@@ -45,21 +45,23 @@ const Places = (() => {
 
   const pane = map.createPane("pois"); pane.style.zIndex = 640;
   const lpane = map.createPane("labels"); lpane.style.zIndex = 630; lpane.style.pointerEvents = "none";
+  const ppane = map.createPane("pipLabels"); ppane.style.zIndex = 650; ppane.style.pointerEvents = "none";
   const poiR = L.canvas({pane:"pois", padding:0.3});
-  const pips = L.layerGroup().addTo(map), labels = L.layerGroup().addTo(map);
+  const pips = L.layerGroup().addTo(map), labels = L.layerGroup().addTo(map), pipLabels = L.layerGroup().addTo(map);
   const pretty = k => k.replace(/_/g, " ").replace(/^./, c => c.toUpperCase());
 
-  function popupHtml(x){
+  function popupHtml(x, withOpen = false){
     const g = GROUP[x.g], e = escapeHtml;
     const web = x.w && /^https?:\/\//i.test(x.w) ? `<a href="${e(x.w)}" target="_blank" rel="noopener">Website</a>` : "";
     const [type, id] = [{n:"node", w:"way", r:"relation"}[x.i[0]], x.i.slice(1)];
+    const src = type ? `<a href="https://www.openstreetmap.org/${type}/${id}" target="_blank" rel="noopener">OpenStreetMap</a>` : `<span class="stat">Source: Overture Maps</span>`;
     return `<div class="pop"><b>${e(x.n)}</b><div class="pop-cat" style="color:${g.color}">${e(pretty(x.k))}${x.c ? " · " + e(x.c.replace(/;/g, ", ").replace(/_/g, " ")) : ""}</div>
       ${x.ad ? `<div>${e(x.ad)}</div>` : ""}${x.h ? `<div class="stat">${e(x.h)}</div>` : ""}${x.p ? `<div class="stat">${e(x.p)}</div>` : ""}
       <div class="stat">${Grid.mgrsAt(L.latLng(x.a, x.o))}</div>
-      <div class="row">${web}<a href="https://www.openstreetmap.org/${type}/${id}" target="_blank" rel="noopener">OpenStreetMap</a></div></div>`;
+      <div class="row">${web}${src}</div>${withOpen ? `<button class="pop-open" data-lat="${x.a}" data-lon="${x.o}">Open grid square</button>` : ""}</div>`;
   }
   function render(){
-    pips.clearLayers(); labels.clearLayers();
+    pips.clearLayers(); labels.clearLayers(); pipLabels.clearLayers();
     const z = map.getZoom(), b = map.getBounds().pad(0.1);
     if (p.showCities || p.showHoods){
       let n = 0;
@@ -72,18 +74,21 @@ const Places = (() => {
           icon:L.divIcon({className:`plbl plbl-${cls}`, iconSize:[0,0], html:`<span>${escapeHtml(pl.n)}</span>`})}));
       }
     }
-    if (!p.showPois || z < 14) return;
+    if (!p.showPois || z < 15) return;
     const r = z >= 17 ? 7 : z >= 16 ? 6 : 5, found = [];
     for (let la = Math.floor(b.getSouth()*50); la <= Math.floor(b.getNorth()*50); la++)
       for (let lo = Math.floor(b.getWest()*50); lo <= Math.floor(b.getEast()*50); lo++)
-        for (const x of p.bins.get(`${la}:${lo}`) || []) if (!p.off.has(x.g) && b.contains([x.a, x.o])) found.push(x);
+        for (const x of p.bins.get(`${la}:${lo}`) || []){
+          if (p.off.has(x.g) || !b.contains([x.a, x.o])) continue;
+          if (z < 17 && x.g === "service" && x.i[0] === "o") continue;   // Overture offices and services wait for zoom 17
+          found.push(x);
+        }
     found.sort((u, v) => GROUPS.findIndex(g => g.id === u.g) - GROUPS.findIndex(g => g.id === v.g));
     found.slice(0, 3000).forEach(x => {
       const m = L.circleMarker([x.a, x.o], {renderer:poiR, radius:r, color:"#ffffff", weight:1.5, fillColor:GROUP[x.g].color, fillOpacity:1, bubblingMouseEvents:false});
-      m.bindPopup(() => popupHtml(x), {maxWidth:260}); pips.addLayer(m);
+      m.bindPopup(() => popupHtml(x, true), {maxWidth:260}); pips.addLayer(m);
     });
-    if (z >= 17) found.slice(0, 250).forEach(x => labels.addLayer(L.marker([x.a, x.o], {pane:"labels", interactive:false, keyboard:false,
-      icon:L.divIcon({className:"poilbl", iconSize:[0,0], html:`<span style="color:${GROUP[x.g].color}">${escapeHtml(x.n)}</span>`})})));
+    if (z >= 15) labelOn(map, pipLabels, found.slice(0, 3000), "pipLabels");
   }
 
   /* ---------- fetching ---------- */
@@ -119,6 +124,31 @@ const Places = (() => {
     return failed === 0;
   }
 
+  /* ---------- names beside pips: as many as fit without overlapping, more as you zoom in ---------- */
+  const RANK = Object.fromEntries(GROUPS.map((g, i) => [g.id, i]));
+  const shortName = n => n.length > 28 ? n.slice(0, 27) + "…" : n;
+  function labelOn(m, group, list, pane){
+    group.clearLayers();
+    const size = m.getSize(), CELL = 48, grid = new Map(), placed = [];
+    const cellsOf = b => { const out = []; for (let i = Math.floor(b.x0/CELL); i <= Math.floor(b.x1/CELL); i++)
+      for (let j = Math.floor(b.y0/CELL); j <= Math.floor(b.y1/CELL); j++) out.push(`${i},${j}`); return out; };
+    const clash = b => cellsOf(b).some(k => (grid.get(k) || []).some(o => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0));
+    const take = b => { for (const k of cellsOf(b)) (grid.get(k) || grid.set(k, []).get(k)).push(b); };
+    const order = list.slice().sort((u, v) => (RANK[u.g] - RANK[v.g]) || (u.i[0] === "o") - (v.i[0] === "o") || u.n.length - v.n.length);
+    for (const x of order){
+      const pt = m.latLngToContainerPoint([x.a, x.o]);
+      if (pt.x < 0 || pt.y < 0 || pt.x > size.x || pt.y > size.y) continue;
+      const text = shortName(x.n), w = text.length*6.6 + 6;
+      const b = {x0:pt.x + 8, y0:pt.y - 8, x1:pt.x + 8 + w, y1:pt.y + 8};
+      if (clash(b)) continue;
+      take(b); take({x0:pt.x - 6, y0:pt.y - 6, x1:pt.x + 6, y1:pt.y + 6});
+      group.addLayer(L.marker([x.a, x.o], {pane, interactive:false, keyboard:false,
+        icon:L.divIcon({className:"poilbl", iconSize:[0,0], html:`<span>${escapeHtml(text)}</span>`})}));
+      if (placed.push(x) >= 400) break;
+    }
+    return placed.length;
+  }
+
   /* ---------- focus view: the places inside one grid square ---------- */
   const inBounds = b => p.pois.filter(x => b.contains([x.a, x.o]) && !p.off.has(x.g));
   function drawOn(m, group, b){
@@ -137,6 +167,36 @@ const Places = (() => {
     return ok;
   }
   const squareFetched = async id => (await kvGet("poiSquares").catch(()=>null) || []).includes(id);
+
+  /* ---------- Overture places: prebuilt per-cell files, loaded on demand ---------- */
+  const OV_CELL = 20;
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  async function loadOverture(b){
+    const done = new Set(await kvGet("ovCells").catch(()=>null) || []), keys = [];
+    for (let la = Math.floor(b.getSouth()*OV_CELL); la <= Math.floor(b.getNorth()*OV_CELL); la++)
+      for (let lo = Math.floor(b.getWest()*OV_CELL); lo <= Math.floor(b.getEast()*OV_CELL); lo++)
+        if (!done.has(`${la}_${lo}`)) keys.push(`${la}_${lo}`);
+    if (!keys.length) return 0;
+    const osmNear = new Map();
+    for (const x of p.pois) if (x.i[0] !== "o"){ const k = binKey(x.a, x.o); (osmNear.get(k) || osmNear.set(k, []).get(k)).push(x); }
+    const have = new Set(p.pois.map(x => x.i)); let added = 0;
+    for (const key of keys){
+      let recs;
+      try { const r = await fetch(`packs/places/${key}.json`); if (r.status === 404){ done.add(key); continue; } if (!r.ok) continue; recs = await r.json(); }
+      catch { continue; }
+      for (const [id, a, o, n, g, k, ad, ph, w] of recs){
+        if (have.has("o" + id)) continue;
+        const nn = norm(n), dup = (osmNear.get(binKey(a, o)) || []).some(x => norm(x.n) === nn && Math.abs(x.a - a) < 0.001 && Math.abs(x.o - o) < 0.001);
+        if (dup) continue;
+        p.pois.push({i:"o" + id, a, o, n, g, k, ad, p:ph, w}); have.add("o" + id); added++;
+      }
+      done.add(key);
+    }
+    if (added){ index(); counts(); render(); await kvPut("pois", p.pois).catch(()=>{}); }
+    await kvPut("ovCells", [...done]).catch(()=>{});
+    if (added) log(`Loaded ${fmtN(added)} Overture places`);
+    return added;
+  }
   let namesBusy = false;
   function ensureNames(b){ if (!p.places.some(x => x.a > b.s && x.a < b.n && x.o > b.w && x.o < b.e) && navigator.onLine) fetchPlaceNames(b); }
   async function fetchPlaceNames(b = Packages.bbox()){
@@ -190,8 +250,8 @@ const Places = (() => {
     for (const [id, key] of [["showPois","showPois"],["showCities","showCities"],["showHoods","showHoods"]]){
       $(id).checked = p[key]; $(id).onchange = e => { p[key] = e.target.checked; render(); saveSettings(); };
     }
-    $("poiView").onclick = () => { if (map.getZoom() < 13){ log("Zoom in to 13 or closer, or use Fetch for Houston area"); return; } const b = map.getBounds();
-      fetchPois({s:b.getSouth(), w:b.getWest(), n:b.getNorth(), e:b.getEast()}, "this view"); };
+    $("poiView").onclick = async () => { if (map.getZoom() < 13){ log("Zoom in to 13 or closer, or open a grid square"); return; } const b = map.getBounds();
+      await loadOverture(b); fetchPois({s:b.getSouth(), w:b.getWest(), n:b.getNorth(), e:b.getEast()}, "this view"); };
     $("poiCity").onclick = () => fetchPois(Packages.core(), "city core");
     $("placeFetch").onclick = () => fetchPlaceNames();
     let t = 0; $("search").oninput = e => { clearTimeout(t); t = setTimeout(() => search(e.target.value), 150); };
@@ -199,5 +259,7 @@ const Places = (() => {
     index(); counts(); render();
   }
   map.on("moveend", render);
-  return {init, ensureNames, drawOn, fetchSquare, squareFetched, groups:GROUPS, pretty};
+  map.on("popupopen", e => { const b = e.popup.getElement()?.querySelector(".pop-open"); if (!b) return;
+    b.onclick = () => { map.closePopup(); Grid.openAt(L.latLng(+b.dataset.lat, +b.dataset.lon)); }; });
+  return {init, ensureNames, drawOn, labelOn, fetchSquare, squareFetched, loadOverture, groups:GROUPS, pretty};
 })();
