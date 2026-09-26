@@ -6,6 +6,7 @@
 <title>Houston Blackout Map</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
 <meta name="theme-color" content="#1a2220">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -64,8 +65,21 @@ label{display:flex;gap:6px;align-items:center}
 #overlayList li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #hud{position:absolute;right:10px;bottom:calc(30px + env(safe-area-inset-bottom,0px));z-index:800;background:rgba(10,14,12,.78);color:#e8eeeb;
   font:12px/1.4 var(--mono);font-variant-numeric:tabular-nums;padding:6px 10px;border-radius:6px;pointer-events:none}
-#modeBanner{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:800;background:var(--ink);color:var(--panel);
-  padding:6px 12px;border-radius:6px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#modeBanner{position:absolute;left:50%;top:calc(12px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:800;background:var(--ink);color:var(--panel);
+  padding:6px 6px 6px 12px;border-radius:6px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;gap:10px;align-items:center;max-width:calc(100% - 120px)}
+#modeBanner[hidden]{display:none}
+#modeBanner button{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;padding:4px 10px}
+.pkgbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.pkgbar button{padding:3px 8px;font-size:12.5px}
+#pkgScreen{position:fixed;inset:0;z-index:2000;background:rgba(8,12,10,.62);display:grid;place-items:center;padding:16px}
+#pkgScreen[hidden]{display:none}
+.pkg-card{background:var(--panel);color:var(--ink);border-radius:10px;padding:18px;width:min(520px,100%);max-height:calc(100% - 32px);overflow-y:auto;
+  display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.45)}
+.pkg-head{justify-content:space-between}
+.pkg-card h2{font-size:12px}
+#pkgList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.pkg{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:10px;flex-wrap:wrap}
+.pkg.cur{border-color:var(--accent)}
 #togglePanel{display:none}
 .leaflet-container{font-family:var(--sans)}
 @media (max-width:720px){
@@ -78,6 +92,46 @@ label{display:flex;gap:6px;align-items:center}
     background:var(--panel)}
   body:not(.panel-closed) #togglePanel{left:calc(min(340px,88vw) + 8px)}
 }
+details{border-top:1px solid var(--line);padding-top:10px}
+details>*+*{margin-top:8px}
+summary{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600;cursor:pointer;list-style-position:outside}
+summary:focus-visible{outline:2px solid var(--accent)}
+input[type=text],input[type=search]{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%;min-width:0}
+label.stack{flex-direction:column;align-items:stretch;gap:4px}
+.tools.two{grid-template-columns:repeat(2,1fr)}
+.groups{display:grid;grid-template-columns:1fr;gap:2px;font-size:13px}
+.groups label{gap:8px}
+.swatch{display:inline-block;width:12px;height:12px;border-radius:50%;flex:none;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+.cats,.areas,#searchResults{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cat-row{display:grid;grid-template-columns:32px 1fr 70px auto 28px;gap:6px;align-items:center}
+.cat-row input[type=color]{width:32px;height:30px;padding:0;border:1px solid var(--line);border-radius:6px;background:none}
+.cat-row .del{padding:4px 6px}
+.areas{max-height:260px;overflow-y:auto}
+.areas li{display:grid;grid-template-columns:14px 1fr 110px;gap:6px;align-items:center;padding:6px;border:1px solid var(--line);border-radius:6px}
+.areas li.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.areas li .row{grid-column:1/-1}
+.areas li .row button{padding:4px 8px;font-size:12.5px}
+.card{border:1px solid var(--line);border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:8px}
+.search{position:relative}
+#searchResults{margin-top:6px}
+#searchResults button{display:flex;gap:8px;align-items:center;text-align:left;width:100%;background:var(--panel)}
+button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:calc(24px + env(safe-area-inset-bottom,0px));box-shadow:0 2px 8px rgba(0,0,0,.35);background:var(--panel)}
+.plbl span,.glbl span,.poilbl span{position:absolute;white-space:nowrap;pointer-events:none;color:#fff;
+  text-shadow:0 0 3px #000,0 0 2px #000,0 1px 2px #000}
+.plbl span{transform:translate(-50%,-50%)}
+.plbl-city span{font:700 17px/1 var(--sans);letter-spacing:.02em}
+.plbl-town span{font:600 14px/1 var(--sans)}
+.plbl-suburb span{font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.12em;color:#e6ece9}
+.plbl-hood span{font:500 11.5px/1 var(--sans);letter-spacing:.04em;color:#dfe6e3}
+.glbl span{font:500 10.5px/1 var(--mono);transform:translate(4px,4px);color:#fff;opacity:.85}
+.poilbl span{font:600 11.5px/1 var(--sans);transform:translate(9px,-50%);color:#fff!important}
+.aoi-label{background:rgba(10,14,12,.72);color:#fff;border:0;box-shadow:none;font:600 12px/1.2 var(--sans);padding:2px 6px}
+.aoi-label::before{display:none}
+.z-lo .aoi-label{display:none}
+.pop{display:flex;flex-direction:column;gap:3px;font:13px/1.4 var(--sans)}
+.pop-cat{font-weight:600}
+.pop .row{gap:10px}
+@media (max-width:720px){ button.floating{left:12px} body:not(.panel-closed) button.floating{display:none} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -86,22 +140,99 @@ label{display:flex;gap:6px;align-items:center}
 <aside id="panel">
   <header>
     <h1>Houston Blackout Map</h1>
-    <div class="sub">Residential areas blacked out, so only non-residential land shows. <span id="net" class="pill ok">online</span></div>
+    <div class="sub">Satellite map with residential areas blacked out. <span id="net" class="pill ok">online</span></div>
+    <div class="pkgbar"><span class="stat">Package</span> <b id="pkgName">—</b> <button id="pkgSwitch">Switch package</button></div>
   </header>
 
-  <section>
-    <h2>Imagery</h2>
+  <div class="search">
+    <input type="search" id="search" placeholder="Search saved places and neighborhoods" aria-label="Search places" autocomplete="off">
+    <ul id="searchResults"></ul>
+  </div>
+
+  <details open>
+    <summary>Places and names</summary>
+    <label><input type="checkbox" id="showCities"> City and town names</label>
+    <label><input type="checkbox" id="showHoods"> Neighborhood names</label>
+    <label><input type="checkbox" id="showPois"> Place pips (from zoom 14)</label>
+    <div id="poiGroups" class="groups"></div>
+    <div class="row">
+      <button id="poiView">Fetch places for this view</button>
+      <button id="poiCity">Fetch for city core</button>
+      <button id="placeFetch">Refresh names</button>
+    </div>
+    <div class="bar"><i id="poiBar"></i></div>
+    <div class="stat" id="poiStats"></div>
+  </details>
+
+  <details open>
+    <summary>Areas of interest</summary>
+    <ul id="aoiCats" class="cats"></ul>
+    <div class="row"><button id="aoiAddCat">Add category</button><label><input type="checkbox" id="aoiNames"> Show area names</label></div>
+    <label class="stack">New areas go in <select id="aoiCurrent" aria-label="Category for new areas"></select></label>
+    <div class="tools two" role="group" aria-label="Area tools">
+      <button data-mode="aoiPoly" aria-pressed="false">Draw area</button>
+      <button data-mode="aoiRect" aria-pressed="false">Box area</button>
+    </div>
+    <input type="search" id="aoiFilter" placeholder="Filter areas by name" aria-label="Filter areas">
+    <ul id="aoiList" class="areas"></ul>
+    <div class="stat" id="aoiStats"></div>
+  </details>
+
+  <details open>
+    <summary>Grid</summary>
+    <div class="row">
+      <label><input type="checkbox" id="showGrid"> Show grid</label>
+      <label>Squares <select id="gridBase" aria-label="Grid square size">
+        <option value="10000">10 km</option><option value="5000">5 km</option><option value="2000">2 km</option>
+        <option value="1000">1 km</option><option value="500">500 m</option></select></label>
+    </div>
+    <div class="tools two" role="group" aria-label="Grid tools">
+      <button data-mode="gpick" aria-pressed="false">Pick square</button>
+      <button data-mode="gblack" aria-pressed="false">Black out squares</button>
+    </div>
+    <div id="gridSel" class="card"></div>
+    <div class="stat" id="gridStats"></div>
+    <p class="note" id="gridNote"></p>
+    <p class="note">Squares follow the MGRS grid in the package's UTM zone. Pick a square to split it into smaller squares, then tap or drag across squares to black them out as not of interest.</p>
+  </details>
+
+  <details>
+    <summary>Residential blackout</summary>
+    <div class="row">
+      <button id="osmView">Fetch for this view</button>
+      <button id="osmCity">Fetch for city core</button>
+    </div>
+    <div class="bar"><i id="osmBar"></i></div>
+    <div class="stat" id="maskStats"></div>
+    <label>Opacity <input type="range" id="opacity" min="0" max="1" step="0.05" value="1"> <span class="stat" id="opVal">100%</span></label>
+    <label><input type="checkbox" id="showMask" checked> Show blackout</label>
+    <div class="tools" role="group" aria-label="Blackout tools">
+      <button data-mode="pan" aria-pressed="true">Pan</button>
+      <button data-mode="poly" aria-pressed="false">Draw</button>
+      <button data-mode="rect" aria-pressed="false">Box</button>
+      <button data-mode="cut" aria-pressed="false">Cut out</button>
+      <button data-mode="erase" aria-pressed="false">Erase</button>
+      <button data-mode="edit" aria-pressed="false">Reshape</button>
+    </div>
+    <p class="note">Draw and Box black out new ground. Cut out opens a hole. Erase removes a whole shape. Reshape moves one shape's corners. The opacity also applies to blacked-out grid squares.</p>
+  </details>
+
+  <details>
+    <summary>Offline imagery</summary>
+    <button id="packGet" class="primary">Download this package</button>
+    <div class="stat" id="packInfo">Region: 100 mi (161 km) square, zoom 8–13, about 8,000 tiles / 125 MB. City: zoom 14–15, about 5,700 tiles / 164 MB.</div>
+    <label><input type="checkbox" id="packRegion14"> <span id="packRegion14Text">Add zoom 14 across the package</span></label>
+    <label><input type="checkbox" id="packZ16"> <span id="packZ16Text">Add zoom 16 over the city core</span></label>
+    <div class="bar"><i id="packBar"></i></div>
+    <label><input type="checkbox" id="domainLock"> Stay inside the package (never loads tiles outside its square)</label>
     <select id="source" aria-label="Imagery source"></select>
     <label><input type="checkbox" id="offlineOnly"> Offline only (use saved tiles, no network)</label>
     <label><input type="checkbox" id="saveBrowse"> Save tiles I look at</label>
     <p class="note" id="sourceNote"></p>
-  </section>
-
-  <section>
-    <h2>Save imagery for offline</h2>
+    <p class="note">Or save any area yourself:</p>
     <div class="row">
       <button id="areaView">Use this view</button>
-      <button id="areaCity">Houston city</button>
+      <button id="areaCity">City core</button>
       <button id="areaDraw">Draw area</button>
     </div>
     <div class="row">
@@ -117,59 +248,58 @@ label{display:flex;gap:6px;align-items:center}
     <div class="stat" id="dlStatus"></div>
     <div class="stat" id="storeStats">Saved: …</div>
     <div class="row"><button id="clearTiles">Delete saved tiles for this source</button></div>
-  </section>
+  </details>
 
-  <section>
-    <h2>Residential blackout</h2>
+  <details>
+    <summary>Files</summary>
     <div class="row">
-      <button id="osmView">Fetch for this view</button>
-      <button id="osmCity">Fetch for Houston area</button>
-    </div>
-    <div class="bar"><i id="osmBar"></i></div>
-    <div class="stat" id="maskStats"></div>
-    <label>Opacity <input type="range" id="opacity" min="0" max="1" step="0.05" value="1"> <span class="stat" id="opVal">100%</span></label>
-    <label><input type="checkbox" id="showMask" checked> Show blackout</label>
-  </section>
-
-  <section>
-    <h2>Edit blackout</h2>
-    <div class="tools" role="group" aria-label="Edit tools">
-      <button data-mode="pan" aria-pressed="true">Pan</button>
-      <button data-mode="poly" aria-pressed="false">Draw</button>
-      <button data-mode="rect" aria-pressed="false">Box</button>
-      <button data-mode="cut" aria-pressed="false">Cut out</button>
-      <button data-mode="erase" aria-pressed="false">Erase</button>
-      <button data-mode="edit" aria-pressed="false">Reshape</button>
-    </div>
-    <div class="row"><button id="undo" disabled>Undo</button><span class="stat" id="undoInfo"></span></div>
-    <p class="note">Draw and Box black out new ground. Cut out opens a hole in the blackout. Erase removes a whole shape. Reshape moves the corners of one shape. Esc returns to Pan.</p>
-  </section>
-
-  <section>
-    <h2>Overlays and files</h2>
-    <div class="row">
+      <button id="impAreas">Import areas</button>
       <button id="impMask">Import as blackout</button>
       <button id="impOverlay">Import as overlay</button>
     </div>
     <ul id="overlayList"></ul>
-    <div class="row"><button id="expMask">Export blackout (.geojson)</button></div>
+    <div class="row">
+      <button id="expAreas">Export areas</button>
+      <button id="expGrid">Export grid blackout</button>
+      <button id="expMask">Export blackout</button>
+    </div>
+    <p class="note">Files are GeoJSON. Use export and import to move your work between phone and desktop.</p>
     <input type="file" id="file" accept=".geojson,.json,application/geo+json,application/json" hidden>
-  </section>
+  </details>
 
-  <section>
-    <h2>Activity</h2>
+  <details>
+    <summary>Activity</summary>
     <pre id="log"></pre>
-  </section>
+  </details>
 </aside>
 <div id="map"></div>
 <div id="hud">—</div>
-<div id="modeBanner" hidden></div>
+<div id="modeBanner" hidden><span id="modeBannerText"></span><button id="modeDone">Done</button></div>
+<div id="pkgScreen" hidden>
+  <div class="pkg-card" role="dialog" aria-labelledby="pkgTitle">
+    <div class="row pkg-head"><h2 id="pkgTitle">Choose a package</h2><button id="pkgClose">Close</button></div>
+    <p class="note">A package is a 322 km (200 mi) square, 161 km (100 mi) out from its centre. The map, grid and downloads stay inside the package you open.</p>
+    <ul id="pkgList"></ul>
+    <h2>New package</h2>
+    <label class="stack">Name <input type="text" id="pkgNewName" placeholder="Dallas"></label>
+    <div class="row"><label class="stack">Centre latitude <input type="text" id="pkgNewLat" inputmode="decimal" placeholder="32.7767"></label>
+      <label class="stack">Centre longitude <input type="text" id="pkgNewLon" inputmode="decimal" placeholder="-96.7970"></label></div>
+    <div class="row"><button id="pkgPick">Pick centre on map</button><button id="pkgCreate" class="primary">Create and open</button></div>
+    <p class="note" id="pkgNewMsg"></p>
+  </div>
+</div>
+<button id="undo" class="floating" disabled>Undo</button>
 
 <script>/*INLINE:vendor/leaflet.js*/</script>
 <script>/*INLINE:vendor/leaflet-geoman.js*/</script>
+<script>/*INLINE:src/utm.js*/</script>
 <script>
 "use strict";
 const HOUSTON_BBOX = {s:29.52, w:-95.79, n:30.11, e:-95.01};
+const DOMAIN_BBOX = {s:28.310, w:-97.035, n:31.211, e:-93.704};   // square 161 km (100 statute mi) out from downtown
+const PACKS = [
+  {id:"region", label:"Region", bbox:DOMAIN_BBOX, zmin:8, zmax:13},
+  {id:"city", label:"City", bbox:HOUSTON_BBOX, zmin:14, zmax:15}];
 const OVERPASS = ["https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter"];
@@ -186,6 +316,7 @@ const $ = id => document.getElementById(id);
 const log = msg => { const el=$("log"); el.textContent = `${new Date().toLocaleTimeString()}  ${msg}\n` + el.textContent; };
 const fmtBytes = b => b>=1e9?(b/1e9).toFixed(2)+" GB":b>=1e6?(b/1e6).toFixed(1)+" MB":(b/1e3).toFixed(0)+" kB";
 const fmtN = n => n.toLocaleString("en-US");
+const escapeHtml = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
 
 /* ---------- storage (IndexedDB) ---------- */
 const db = new Promise((res, rej) => {
@@ -210,7 +341,7 @@ const tilePut = (k,blob) => idb("tiles","readwrite", s => s.put(blob,k));
 navigator.storage?.persist?.().catch(()=>{});
 
 /* ---------- state ---------- */
-const state = { source:"usgs", offlineOnly:false, saveBrowse:false, maskOpacity:1, mode:"pan",
+const state = { source:"usgs", offlineOnly:false, saveBrowse:false, maskOpacity:1, mode:"pan", domainLock:true,
   area:null, deletedOsm:new Set(), overlays:[] };
 
 /* ---------- map ---------- */
@@ -239,10 +370,17 @@ const OfflineTiles = L.TileLayer.extend({
   }
 });
 let base;
+const domainBounds = () => { const b = Packages.bbox(); return L.latLngBounds([b.s, b.w], [b.n, b.e]); };
+function applyDomainLock(){
+  map.setMaxBounds(state.domainLock ? domainBounds().pad(0.05) : null);
+  map.setMinZoom(state.domainLock ? 8 : 3);
+  setSource(state.source);
+}
 function setSource(key){
   state.source = key; const s = SOURCES[key];
   if (base) map.removeLayer(base);
-  base = new OfflineTiles(s.url, {sourceKey:key, maxNativeZoom:s.maxNative, maxZoom:19, attribution:s.attr});
+  base = new OfflineTiles(s.url, {sourceKey:key, maxNativeZoom:s.maxNative, maxZoom:19, attribution:s.attr,
+    keepBuffer:4, updateWhenZooming:false, bounds: state.domainLock ? domainBounds() : undefined});
   base.on("tileunload", e => { if (e.tile.src.startsWith("blob:")) URL.revokeObjectURL(e.tile.src); });
   base.addTo(map); base.bringToBack();
   $("sourceNote").textContent = s.note;
@@ -324,9 +462,47 @@ async function startDownload(){
       done++; if (done%10===0) show();
     }
   }
-  await Promise.all(Array.from({length:6}, worker));
+  await Promise.all(Array.from({length:10}, worker));
   show(); log(`${dl.stop?"Stopped":"Finished"}: ${fmtN(saved)} new tiles, ${fmtN(failed)} failed`);
   dl = null; $("dlStop").disabled = true; updateEstimate();
+}
+
+/* ---------- prebuilt city pack ---------- */
+async function installOnePack(pk, bar){
+  try {
+    const r = await fetch(`packs/${pk.id}/index.json`, {cache:"no-cache"});
+    if (!r.ok) throw new Error(`no ${pk.label.toLowerCase()} pack on this server (${r.status})`);
+    const idx = await r.json(); let got = 0, saved = 0;
+    log(`Installing ${idx.name} pack: ${fmtN(idx.tiles)} tiles in ${idx.chunks.length} files, ${fmtBytes(idx.bytes)}`);
+    for (const ch of idx.chunks){
+      const res = await fetch(`packs/${pk.id}/${ch.file}`);
+      if (!res.ok) throw new Error(`${ch.file}: ${res.status}`);
+      const reader = res.body.getReader(), parts = [];
+      for (;;){ const {done, value} = await reader.read(); if (done) break; parts.push(value); got += value.length; bar(got/idx.bytes); }
+      const blob = new Blob(parts);
+      for (let i = 0; i < ch.tiles.length; i += 250){
+        const batch = ch.tiles.slice(i, i+250);
+        await idb("tiles","readwrite", s => { for (const [z,x,y,off,len] of batch) s.put(blob.slice(off, off+len, "image/jpeg"), `usgs/${z}/${x}/${y}`); });
+      }
+      saved += ch.tiles.length;
+      $("packInfo").textContent = `${idx.name}: installed ${fmtN(saved)} of ${fmtN(idx.tiles)} tiles · ${fmtBytes(got)}`;
+    }
+    log(`${idx.name} pack installed: ${fmtN(saved)} tiles`);
+  } catch(e){
+    log(`${pk.label} pack download failed (${e.message}). Saving the same area tile by tile instead.`);
+    await liveDownload(pk.bbox, pk.zmin, pk.zmax, `${pk.label} pack area`);
+  }
+}
+async function liveDownload(bbox, zmin, zmax, label){
+  setArea(bbox, label); $("zMin").value = zmin; $("zMax").value = zmax; await startDownload();
+}
+async function installPack(){
+  const btn = $("packGet"); btn.disabled = true;
+  if (Packages.prebuilt()) for (const [k, pk] of PACKS.entries()) await installOnePack(pk, f => $("packBar").style.width = (100*(k+f)/PACKS.length).toFixed(1) + "%");
+  else { await liveDownload(Packages.bbox(), 8, 13, "package, zoom 8–13"); await liveDownload(Packages.core(), 14, 15, "city core, zoom 14–15"); }
+  if ($("packRegion14").checked) await liveDownload(Packages.bbox(), 14, 14, "package, zoom 14");
+  if ($("packZ16").checked) await liveDownload(Packages.core(), 16, 16, "city core, zoom 16");
+  refreshStats("usgs"); base.redraw(); btn.disabled = false;
 }
 
 /* ---------- blackout mask ---------- */
@@ -340,13 +516,13 @@ function saveMask(){ maskCount(); clearTimeout(saveTimer); saveTimer = setTimeou
   kvPut("mask", mask.toGeoJSON()); kvPut("deletedOsm", [...state.deletedOsm]); }, 700); }
 const undoStack = [];
 function pushUndo(label){
-  undoStack.push({label, fc:mask.toGeoJSON(), del:[...state.deletedOsm]}); if (undoStack.length>12) undoStack.shift();
-  $("undo").disabled=false; $("undoInfo").textContent = `last: ${label}`;
+  undoStack.push({label, fc:mask.toGeoJSON(), del:[...state.deletedOsm], grid:Grid.snapshot(), aoi:Aoi.snapshot()}); if (undoStack.length>12) undoStack.shift();
+  $("undo").disabled=false; $("undo").textContent = `Undo ${label}`;
 }
 function undo(){
   const u = undoStack.pop(); if (!u) return; setMode("pan");
-  mask.clearLayers(); mask.addData(u.fc); state.deletedOsm = new Set(u.del); saveMask();
-  $("undo").disabled = !undoStack.length; $("undoInfo").textContent = undoStack.length ? `last: ${undoStack.at(-1).label}` : ""; log(`Undid: ${u.label}`);
+  mask.clearLayers(); mask.addData(u.fc); state.deletedOsm = new Set(u.del); saveMask(); Grid.restore(u.grid); Aoi.restore(u.aoi);
+  $("undo").disabled = !undoStack.length; $("undo").textContent = undoStack.length ? `Undo ${undoStack.at(-1).label}` : "Undo"; log(`Undid: ${u.label}`);
 }
 function adoptLayer(layer, props){
   map.removeLayer(layer);
@@ -417,7 +593,7 @@ async function fetchResidential(b, label){
   const have = osmIds(); let added = 0, failedCells = 0;
   for (let i=0;i<cells.length;i++){
     const bb = cells[i].map(v=>v.toFixed(5)).join(",");
-    const q = `[out:json][timeout:90];(way["landuse"="residential"](${bb});relation["landuse"="residential"](${bb}););out geom;`;
+    const q = `[out:json][timeout:90];nwr["landuse"="residential"](${bb});out geom;`;
     try {
       const data = await overpass(q); const fc = {type:"FeatureCollection", features:[]};
       for (const el of data.elements){ const id = `${el.type}/${el.id}`;
@@ -434,25 +610,33 @@ async function fetchResidential(b, label){
 
 /* ---------- edit modes ---------- */
 let editing = null;
-const MODE_TEXT = {poly:"Draw: click corners, click the first corner to finish.", rect:"Box: drag a rectangle to black it out.",
+const MODE_TEXT = {poly:"Draw: click corners, click the first corner to finish.", rect:"Box: click two opposite corners to black out.",
   cut:"Cut out: draw a shape to open a hole in the blackout.", erase:"Erase: click a black shape to remove it.",
-  edit:"Reshape: click a black shape, then drag its corners.", area:"Draw the area to save offline."};
+  edit:"Reshape: click a black shape, then drag its corners.", area:"Draw the area to save offline.",
+  aoiPoly:"Draw area: click corners, click the first corner to finish.", aoiRect:"Box area: click two opposite corners.",
+  gpick:"Pick square: tap a grid square.", gblack:"Black out squares: tap or drag across squares. Pan to move the map."};
 function stopEditing(){ if (editing){ editing.pm.disable(); editing.setStyle(maskStyle()); editing = null; saveMask(); } }
 function setMode(m){
-  map.pm.disableDraw(); if (map.pm.globalCutModeEnabled()) map.pm.disableGlobalCutMode(); stopEditing();
+  map.pm.disableDraw(); if (map.pm.globalCutModeEnabled()) map.pm.disableGlobalCutMode(); stopEditing(); Aoi.stopReshape();
+  if (state.mode === m && m !== "pan") m = "pan";
   state.mode = m;
+  m === "gblack" ? map.dragging.disable() : map.dragging.enable();
   document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode===m));
-  $("modeBanner").hidden = !MODE_TEXT[m]; $("modeBanner").textContent = (MODE_TEXT[m]||"") + "  Esc to stop.";
+  $("modeBanner").hidden = !MODE_TEXT[m]; $("modeBannerText").textContent = MODE_TEXT[m] || "";
   const opts = {snappable:false, continueDrawing:true, pathOptions:{color:"#f5b301", weight:2, fillColor:"#000", fillOpacity:.6}};
   if (m==="poly") map.pm.enableDraw("Polygon", opts);
   if (m==="rect") map.pm.enableDraw("Rectangle", opts);
   if (m==="area") map.pm.enableDraw("Rectangle", {...opts, continueDrawing:false, pathOptions:{color:"#f5b301", fill:false}});
   if (m==="cut") map.pm.enableGlobalCutMode({snappable:false, layersToCut:mask.getLayers()});
+  const aoiOpts = {...opts, pathOptions:{color:"#f5b301", weight:2, fillColor:"#f5b301", fillOpacity:.25}};
+  if (m==="aoiPoly") map.pm.enableDraw("Polygon", aoiOpts);
+  if (m==="aoiRect") map.pm.enableDraw("Rectangle", aoiOpts);
 }
 map.on("pm:create", e => {
   if (state.mode==="area"){ const b = e.layer.getBounds(); map.removeLayer(e.layer);
     setArea({s:b.getSouth(), w:b.getWest(), n:b.getNorth(), e:b.getEast()}, "drawn rectangle"); setMode("pan"); return; }
   if (state.mode==="cut") return;
+  if (state.mode==="aoiPoly" || state.mode==="aoiRect"){ Aoi.created(e.layer); return; }
   pushUndo(state.mode==="rect"?"box":"drawn shape"); adoptLayer(e.layer); saveMask();
 });
 map.on("pm:drawstart", () => { if (state.mode==="cut") pushUndo("cut out"); });
@@ -493,7 +677,8 @@ const saveOverlays = () => kvPut("overlays", state.overlays.map(o => ({name:o.na
 $("file").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if (!f) return;
   let gj; try { gj = JSON.parse(await f.text()); } catch { log(`${f.name} is not valid GeoJSON`); return; }
-  if (importTarget==="mask"){
+  if (importTarget==="areas"){ log(`Imported ${fmtN(Aoi.importGeoJSON(gj))} areas from ${f.name}`); }
+  else if (importTarget==="mask"){
     pushUndo(`import ${f.name}`);
     const feats = (gj.type==="FeatureCollection" ? gj.features : [gj.type==="Feature"?gj:{type:"Feature",properties:{},geometry:gj}])
       .filter(x => /Polygon/.test(x.geometry?.type||""));
@@ -504,11 +689,15 @@ $("file").addEventListener("change", async e => {
 });
 $("impMask").onclick = () => { importTarget="mask"; $("file").click(); };
 $("impOverlay").onclick = () => { importTarget="overlay"; $("file").click(); };
-$("expMask").onclick = () => {
-  const blob = new Blob([JSON.stringify(mask.toGeoJSON())], {type:"application/geo+json"});
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "houston-blackout.geojson";
+function saveFile(name, obj){
+  const blob = new Blob([JSON.stringify(obj)], {type:"application/geo+json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-};
+}
+$("impAreas").onclick = () => { importTarget="areas"; $("file").click(); };
+$("expMask").onclick = () => saveFile("houston-blackout.geojson", mask.toGeoJSON());
+$("expGrid").onclick = () => saveFile("houston-grid-blackout.geojson", Grid.exportGeoJSON());
+$("expAreas").onclick = () => saveFile("houston-areas-of-interest.geojson", Aoi.exportGeoJSON());
 
 /* ---------- controls ---------- */
 for (const [k,s] of Object.entries(SOURCES)){ const o=document.createElement("option"); o.value=k; o.textContent=s.name; $("source").append(o); }
@@ -516,15 +705,18 @@ $("source").onchange = e => { setSource(e.target.value); kvPut("settings", setti
 $("offlineOnly").onchange = e => { state.offlineOnly = e.target.checked; base.redraw(); kvPut("settings", settings()); };
 $("saveBrowse").onchange = e => { state.saveBrowse = e.target.checked; kvPut("settings", settings()); };
 $("opacity").oninput = e => { state.maskOpacity = +e.target.value; $("opVal").textContent = Math.round(state.maskOpacity*100)+"%";
-  mask.setStyle(maskStyle()); if (editing) editing.setStyle({stroke:true, color:"#f5b301", weight:2}); };
+  mask.setStyle(maskStyle()); if (editing) editing.setStyle({stroke:true, color:"#f5b301", weight:2}); Grid.render(); };
 $("opacity").onchange = () => kvPut("settings", settings());
 $("showMask").onchange = e => e.target.checked ? mask.addTo(map) : map.removeLayer(mask);
 const viewBox = () => { const b = map.getBounds(); return {s:b.getSouth(), w:b.getWest(), n:b.getNorth(), e:b.getEast()}; };
 $("areaView").onclick = () => setArea(viewBox(), "current view");
-$("areaCity").onclick = () => { setArea(HOUSTON_BBOX, "Houston city (bounding box)"); map.fitBounds([[HOUSTON_BBOX.s,HOUSTON_BBOX.w],[HOUSTON_BBOX.n,HOUSTON_BBOX.e]]); };
+$("areaCity").onclick = () => { const c = Packages.core(); setArea(c, "city core"); map.fitBounds([[c.s,c.w],[c.n,c.e]]); };
+$("modeDone").onclick = () => { Packages.cancelPick(); setMode("pan"); };
 $("areaDraw").onclick = () => setMode("area");
 $("zMin").oninput = $("zMax").oninput = updateEstimate;
 $("dlStart").onclick = startDownload;
+$("packGet").onclick = installPack;
+$("domainLock").onchange = e => { state.domainLock = e.target.checked; applyDomainLock(); kvPut("settings", settings()); };
 $("dlStop").onclick = () => { if (dl) dl.stop = true; };
 $("clearTiles").onclick = async () => {
   const b = $("clearTiles");
@@ -533,37 +725,50 @@ $("clearTiles").onclick = async () => {
   const p = state.source; await idb("tiles","readwrite", s => s.delete(IDBKeyRange.bound(p+"/", p+"/￿")));
   log(`Deleted saved ${p.toUpperCase()} tiles`); refreshStats(); base.redraw();
 };
-$("osmView").onclick = () => { if (map.getZoom() < 12) { log("Zoom in to 12 or closer, or use Fetch for Houston"); return; } fetchResidential(viewBox(), "this view"); };
-$("osmCity").onclick = () => fetchResidential(HOUSTON_BBOX, "Houston");
+$("osmView").onclick = () => { if (map.getZoom() < 12) { log("Zoom in to 12 or closer, or use Fetch for Houston area"); return; } fetchResidential(viewBox(), "this view"); };
+$("osmCity").onclick = () => fetchResidential(Packages.core(), "city core");
 $("undo").onclick = undo;
 document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
 $("togglePanel").onclick = () => document.body.classList.toggle("panel-closed");
 if (matchMedia("(max-width:720px)").matches) document.body.classList.add("panel-closed");
-const settings = () => ({source:state.source, offlineOnly:state.offlineOnly, saveBrowse:state.saveBrowse, maskOpacity:state.maskOpacity});
+const settings = () => ({source:state.source, offlineOnly:state.offlineOnly, saveBrowse:state.saveBrowse, maskOpacity:state.maskOpacity, domainLock:state.domainLock});
 function netStatus(){ const on = navigator.onLine; $("net").textContent = on ? "online" : "offline"; $("net").className = "pill " + (on?"ok":"bad"); }
 addEventListener("online", netStatus); addEventListener("offline", netStatus); netStatus();
 
-map.on("mousemove", e => { const z = map.getZoom(), mpp = 156543.034*Math.cos(e.latlng.lat*Math.PI/180)/2**z;
-  $("hud").textContent = `${e.latlng.lat.toFixed(5)}° N  ${(-e.latlng.lng).toFixed(5)}° W · z${z} · ${mpp<10?mpp.toFixed(2):mpp.toFixed(0)} m/px`; });
-map.on("moveend", () => { const c = map.getCenter(), z = map.getZoom(), mpp = 156543.034*Math.cos(c.lat*Math.PI/180)/2**z;
-  $("hud").textContent = `${c.lat.toFixed(5)}° N  ${(-c.lng).toFixed(5)}° W · z${z} · ${mpp<10?mpp.toFixed(2):mpp.toFixed(0)} m/px`; });
-map.fire("moveend");
+function hud(ll){ const z = map.getZoom(), mpp = 156543.034*Math.cos(ll.lat*Math.PI/180)/2**z;
+  const narrow = matchMedia("(max-width:720px)").matches, ns = ll.lat >= 0 ? "N" : "S", ew = ll.lng >= 0 ? "E" : "W";
+  $("hud").textContent = narrow ? `${Grid.mgrsAt(ll)} · z${z}`
+    : `${Grid.mgrsAt(ll)} · ${Math.abs(ll.lat).toFixed(5)}° ${ns} ${Math.abs(ll.lng).toFixed(5)}° ${ew} · z${z} · ${mpp<10?mpp.toFixed(2):mpp.toFixed(0)} m/px`; }
+map.on("mousemove", e => hud(e.latlng));
+map.on("moveend", () => hud(map.getCenter()));
 
+</script>
+<script>/*INLINE:src/grid.js*/</script>
+<script>/*INLINE:src/aoi.js*/</script>
+<script>/*INLINE:src/places.js*/</script>
+<script>/*INLINE:src/packages.js*/</script>
+<script>
+"use strict";
 /* ---------- boot ---------- */
 if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.register("sw.js").catch(e => log(`App install unavailable: ${e.message}`));
 (async () => {
   const s = await kvGet("settings").catch(()=>null) || {};
-  Object.assign(state, {offlineOnly:!!s.offlineOnly, saveBrowse:!!s.saveBrowse, maskOpacity: s.maskOpacity ?? 1});
+  Object.assign(state, {offlineOnly:!!s.offlineOnly, saveBrowse:!!s.saveBrowse, maskOpacity: s.maskOpacity ?? 1, domainLock: s.domainLock !== false});
+  $("domainLock").checked = state.domainLock;
   $("offlineOnly").checked = state.offlineOnly; $("saveBrowse").checked = state.saveBrowse;
   $("opacity").value = state.maskOpacity; $("opVal").textContent = Math.round(state.maskOpacity*100)+"%";
-  const src = SOURCES[s.source] ? s.source : "usgs"; $("source").value = src; setSource(src);
+  const src = SOURCES[s.source] ? s.source : "usgs"; $("source").value = src; state.source = src; applyDomainLock();
   if (src!=="usgs") refreshStats("usgs");
   const fc = await kvGet("mask").catch(()=>null); if (fc) mask.addData(fc);
   state.deletedOsm = new Set(await kvGet("deletedOsm").catch(()=>null) || []);
   mask.setStyle(maskStyle()); maskCount();
   for (const o of (await kvGet("overlays").catch(()=>null) || [])) addOverlay(o);
-  map.attributionControl.addAttribution("Residential areas © OpenStreetMap contributors (ODbL)");
-  log(fc ? "Loaded your saved blackout" : "No blackout yet. Use Fetch for Houston to start.");
+  map.attributionControl.addAttribution("Places and residential areas © OpenStreetMap contributors (ODbL)");
+  await Grid.init(); await Aoi.init(); hud(map.getCenter());
+  Promise.all(PACKS.map(pk => fetch(`packs/${pk.id}/index.json`, {cache:"no-cache"}).then(r => r.ok ? r.json() : null).catch(() => null)))
+    .then(ix => { if (ix.every(Boolean)) $("packInfo").textContent = ix.map(i => `${i.name}: zoom ${i.zmin}–${i.zmax}, ${fmtN(i.tiles)} tiles, ${fmtBytes(i.bytes)}`).join(" · "); });
+  await Places.init(); await Packages.init();
+  log(fc ? "Loaded your saved blackout" : "No blackout yet. Use Fetch for city core to start.");
 })();
 </script>
 </body>

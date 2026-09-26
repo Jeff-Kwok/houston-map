@@ -19,6 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 build.py
+      - uses: actions/cache@v4
+        with:
+          path: .tilecache
+          key: usgs-houston-region-z8-13-city-z14-15-v1
+      - run: ./tools/packs.sh
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
