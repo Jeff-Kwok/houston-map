@@ -76,6 +76,11 @@ label{display:flex;gap:6px;align-items:center}
 .focus-card{background:var(--panel);color:var(--ink);border-radius:10px;width:min(1180px,100%);height:min(860px,100%);display:flex;flex-direction:column;
   box-shadow:0 10px 40px rgba(0,0,0,.45);overflow:hidden}
 .focus-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.focus-tools>*,#panel>*{flex-shrink:0}
+.focus-tools h3{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:10px 0 0;padding-top:10px;border-top:1px solid var(--line);font-weight:600}
+.fplaces{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;max-height:220px;overflow-y:auto}
+.fplaces button{display:flex;gap:8px;align-items:center;text-align:left;width:100%;padding:5px 8px;font-size:13px;background:var(--panel)}
+.focus-tools .areas li{grid-template-columns:14px 1fr 96px}
 .focus-head h2{font:600 16px/1.2 var(--mono);letter-spacing:.02em;color:var(--ink);text-transform:none}
 .focus-body{flex:1;display:flex;min-height:0}
 #focusMap{flex:1;min-width:0;background:#000}
@@ -185,10 +190,7 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
     <ul id="aoiCats" class="cats"></ul>
     <div class="row"><button id="aoiAddCat">Add category</button><label><input type="checkbox" id="aoiNames"> Show area names</label></div>
     <label class="stack">New areas go in <select id="aoiCurrent" aria-label="Category for new areas"></select></label>
-    <div class="tools two" role="group" aria-label="Area tools">
-      <button data-mode="aoiPoly" aria-pressed="false">Draw area</button>
-      <button data-mode="aoiRect" aria-pressed="false">Box area</button>
-    </div>
+    <p class="note"><b>To draw or reshape an area, tap its grid square</b> and use the focus view. Here you name, recolour, sort and delete them.</p>
     <input type="search" id="aoiFilter" placeholder="Filter areas by name" aria-label="Filter areas">
     <ul id="aoiList" class="areas"></ul>
     <div class="stat" id="aoiStats"></div>
@@ -296,19 +298,36 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
     <div class="focus-body">
       <div id="focusMap"></div>
       <div class="focus-tools">
-        <div class="tools two" role="group" aria-label="Focus tools">
+        <div class="tools" role="group" aria-label="Focus tools">
+          <button data-fmode="move" aria-pressed="false">Move</button>
           <button data-fmode="select" aria-pressed="true">Select</button>
           <button data-fmode="paint" aria-pressed="false">Black out</button>
         </div>
         <p class="note" id="focusHint"></p>
         <div class="stat" id="focusSel"></div>
-        <div class="row"><label>Split into <select id="fSplitN">
-          <option value="2">2×2</option><option value="3">3×3</option><option value="4">4×4</option><option value="5">5×5</option><option value="10" selected>10×10</option></select></label>
-          <button id="fSplit">Split</button><button id="fUnsplit">Remove split</button></div>
-        <div class="row"><button id="fBlack">Black out selected</button><button id="fClearAll">Clear this square</button></div>
-        <div class="row"><button id="fAoi">Make area of interest</button><button id="fUndo">Undo</button></div>
+        <div class="row"><button id="fSplit" class="primary">Split 5×5</button><button id="fUnsplit">Remove split</button><button id="fSelClear">Clear selection</button></div>
+        <div class="row"><button id="fAoi">Selected → area</button><button id="fClearAll">Clear blackout here</button><button id="fUndo">Undo</button></div>
         <label><input type="checkbox" id="fSee"> See through blackout</label>
         <div class="stat" id="focusStats"></div>
+
+        <h3>Areas of interest</h3>
+        <label class="stack">New areas go in <select id="fAoiCat" aria-label="Category for new areas"></select></label>
+        <div class="tools two" role="group" aria-label="Area tools">
+          <button data-fmode="aoiPoly" aria-pressed="false">Draw area</button>
+          <button data-fmode="aoiRect" aria-pressed="false">Box area</button>
+        </div>
+        <div class="stat" id="fAoiStats"></div>
+        <ul id="fAoiList" class="areas"></ul>
+
+        <h3>Places in this square</h3>
+        <div class="row"><button id="fPlacesRefresh">Refresh places</button><span class="note" id="fPlacesMsg"></span></div>
+        <div class="stat" id="fPlacesStats"></div>
+        <ul id="fPlaces" class="fplaces"></ul>
+
+        <h3>Imagery</h3>
+        <div class="stat" id="fZoomNote"></div>
+        <div class="stat" id="fHiRes"></div>
+        <button id="fHiResGet">Save full detail for this square</button>
       </div>
     </div>
   </div>
@@ -350,6 +369,11 @@ const SOURCES = {
     note:"Sharper, to zoom 19, but Esri's terms restrict bulk downloads, so this source is view only. Offline saving uses USGS."}
 };
 const MAX_TILES = 150000;
+// NAIP 0.3 m aerial imagery (public domain) rendered per Web Mercator tile; used above zoom 16 in the focus view.
+const NAIP = {name:"USGS NAIP 0.3 m", attr:"Imagery: USGS NAIP, The National Map", zmin:17, zmax:19,
+  url:(z, x, y) => { const r = 2*20037508.342789/2**z, x0 = -20037508.342789 + x*r, y1 = 20037508.342789 - y*r;
+    return `https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?bbox=${x0},${y1-r},${x0+r},${y1}&bboxSR=3857&imageSR=3857&size=256,256&format=jpg&f=image`; }};
+SOURCES.naip = {name:NAIP.name, maxNative:NAIP.zmax, canStore:true, attr:NAIP.attr, url:""};
 const $ = id => document.getElementById(id);
 const log = msg => { const el=$("log"); el.textContent = `${new Date().toLocaleTimeString()}  ${msg}\n` + el.textContent; };
 const fmtBytes = b => b>=1e9?(b/1e9).toFixed(2)+" GB":b>=1e6?(b/1e6).toFixed(1)+" MB":(b/1e3).toFixed(0)+" kB";
@@ -398,7 +422,7 @@ const OfflineTiles = L.TileLayer.extend({
       if (blob) { img.src = URL.createObjectURL(blob); return; }
       if (state.offlineOnly) { done(null, img); return; }
       const url = this.getTileUrl(coords);
-      if (state.saveBrowse && src.canStore) {
+      if ((this.options.alwaysStore || state.saveBrowse) && src.canStore) {
         fetch(url).then(r => r.ok ? r.blob() : Promise.reject(new Error(r.status)))
           .then(b => { tilePut(key, b).then(()=>bumpStats(1, b.size), ()=>{}); img.src = URL.createObjectURL(b); })
           .catch(e => done(e, img));
@@ -407,6 +431,20 @@ const OfflineTiles = L.TileLayer.extend({
     return img;
   }
 });
+const NaipTiles = OfflineTiles.extend({ getTileUrl(c){ return NAIP.url(c.z, c.x, c.y); } });
+const naipLayer = () => { const l = new NaipTiles("", {sourceKey:"naip", minZoom:NAIP.zmin, maxZoom:NAIP.zmax, maxNativeZoom:NAIP.zmax, alwaysStore:true, keepBuffer:2});
+  l.on("tileunload", e => { if (e.tile.src.startsWith("blob:")) URL.revokeObjectURL(e.tile.src); }); return l; };
+async function saveTiles(sourceKey, urlOf, ranges, onProgress, workers = 4, cancelled = () => false){
+  const it = tileIter(ranges), total = countTiles(ranges); let done = 0, saved = 0, bytes = 0, failed = 0;
+  const one = async () => { for (let n = it.next(); !n.done && !cancelled(); n = it.next()){
+    const t = n.value, key = `${sourceKey}/${t.z}/${t.x}/${t.y}`;
+    try { if (await tileHas(key) === undefined){ const r = await fetch(urlOf(t.z, t.x, t.y));
+      if (r.ok){ const b = await r.blob(); await tilePut(key, b); saved++; bytes += b.size; } else failed++; } }
+    catch { failed++; }
+    done++; onProgress({done, total, saved, bytes, failed}); } };
+  await Promise.all(Array.from({length:workers}, one));
+  return {done, total, saved, bytes, failed};
+}
 let base;
 const domainBounds = () => { const b = Packages.bbox(); return L.latLngBounds([b.s, b.w], [b.n, b.e]); };
 function applyDomainLock(){

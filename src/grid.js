@@ -3,7 +3,8 @@
 // where it is split N×N (nested) and parts are blacked out as "not of interest".
 const Grid = (() => {
   let ZONE = 15, ZONE_W = -96.202, ZONE_E = -90;   // the zone is stretched to cover the whole package square
-  const g = {base:1000, splits:new Map(), black:new Set(), show:true, focus:null, selected:null, fmode:"select", seeThrough:false};
+  const g = {base:1000, splits:new Map(), black:new Set(), show:true, focus:null, sel:new Map(), fmode:"select", seeThrough:false};
+  const SPLIT = 5;
   const fmt = v => String(+v.toFixed(2));
   const cell = (size, e0, n0, zone = ZONE) => ({zone, size, e0, n0, id:`${zone}/${fmt(size)}/${fmt(e0)}/${fmt(n0)}`});
   const parse = id => { const [zone, size, e0, n0] = id.split("/").map(Number); return {zone, size, e0, n0, id}; };
@@ -106,8 +107,10 @@ const Grid = (() => {
     else for (const [id] of g.splits){ const c = parse(id); if (c.size === s) walk(c); }
     if (focus){
       view.lines.addLayer(L.polygon(corners(focus), {renderer:view.lineR, color:"#f5b301", weight:3, fill:false, interactive:false}));
-      if (g.selected && g.selected.id !== focus.id)
-        view.lines.addLayer(L.polygon(corners(g.selected), {renderer:view.lineR, color:"#f5b301", weight:2.5, dashArray:"6 4", fill:false, interactive:false}));
+      let ns = 0;
+      for (const c of g.sel.values()){ if (++ns > 400) break;
+        view.fills.addLayer(L.polygon(corners(c), {renderer:view.fillR, stroke:false, fillColor:"#f5b301", fillOpacity:.28, interactive:false}));
+        view.lines.addLayer(L.polygon(corners(c), {renderer:view.lineR, color:"#f5b301", weight:2, fill:false, interactive:false})); }
     }
   }
   const overview = makeView(map, "grid");
@@ -133,19 +136,31 @@ const Grid = (() => {
   map.on("moveend", render);
 
   /* ---------- focus pane ---------- */
-  let fmap = null, fview = null, fbase = null, fcontext = null, fsource = null;
+  let fmap = null, fview = null, fbase = null, fcontext = null, fsource = null, fnaip = null, fplaces = null, ftoken = null;
   function ensureFocusMap(){
     if (fmap) return;
     fmap = L.map("focusMap", {zoomControl:true, attributionControl:false, maxZoom:19, zoomSnap:0.25, boxZoom:false, doubleClickZoom:false});
     fview = makeView(fmap, "focus");
+    fnaip = naipLayer().addTo(fmap); fplaces = L.layerGroup().addTo(fmap);
+    fmap.on("pm:create", e => { if (g.fmode === "aoiPoly" || g.fmode === "aoiRect"){ Aoi.focusCreated(e.layer); setFMode("select"); } });
+    fmap.on("zoomend", () => { $("fZoomNote").textContent = fmap.getZoom() > 16 ? "Showing NAIP 0.3 m imagery" : "Zoom in past 16 for NAIP 0.3 m detail"; });
     fmap.on("moveend", () => g.focus && draw(fview, g.focus));
-    fmap.on("click", e => { if (g.fmode !== "select" || !g.focus) return;
-      const c = cellAt(e.latlng); if (!within(c, g.focus)) return; g.selected = c; draw(fview, g.focus); tools(); });
-    const el = fmap.getContainer(); let painting = null;
+    const el = fmap.getContainer(); let painting = null, selecting = null;
+    const pick = c => { if (!within(c, g.focus) || selecting.seen.has(c.id)) return; selecting.seen.add(c.id); g.sel.set(c.id, c); scheduleRender(); };
+    el.addEventListener("pointerdown", e => {
+      if (g.fmode !== "select" || e.button > 0 || e.target.closest(".leaflet-control, .leaflet-popup")) return;
+      if (selecting){ selecting = null; return; }
+      const c = cellAt(fmap.mouseEventToLatLng(e)); if (!within(c, g.focus)) { g.sel.clear(); scheduleRender(); tools(); return; }
+      if (!(e.shiftKey || e.ctrlKey || e.metaKey)) g.sel.clear();
+      selecting = {pid:e.pointerId, seen:new Set()}; pick(c);
+    });
+    el.addEventListener("pointermove", e => { if (selecting && e.pointerId === selecting.pid) pick(cellAt(fmap.mouseEventToLatLng(e))); });
+    const endSel = () => { if (!selecting) return; selecting = null; render(); tools(); };
+    el.addEventListener("pointerup", endSel); el.addEventListener("pointercancel", endSel);
     const paint = c => { if (!within(c, g.focus) || painting.seen.has(c.id)) return; painting.seen.add(c.id);
       if (painting.val){ dropSubtree(c); g.black.add(c.id); } else g.black.delete(c.id); scheduleRender(); };
     el.addEventListener("pointerdown", e => {
-      if (g.fmode !== "paint" || e.button > 0 || e.target.closest(".leaflet-control")) return;
+      if (g.fmode !== "paint" || e.button > 0 || e.target.closest(".leaflet-control, .leaflet-popup")) return;
       if (painting){ painting = null; return; }
       const c = cellAt(fmap.mouseEventToLatLng(e)); if (!within(c, g.focus)) return;
       pushUndo("grid black out"); painting = {pid:e.pointerId, val:!g.black.has(c.id), seen:new Set()}; paint(c);
@@ -158,46 +173,99 @@ const Grid = (() => {
     if (fcontext) fmap.removeLayer(fcontext);
     fcontext = L.layerGroup().addTo(fmap);
     const style = {stroke:false, fill:true, fillColor:"#000", fillOpacity: g.seeThrough ? Math.min(state.maskOpacity, .5) : state.maskOpacity, interactive:false};
-    mask.eachLayer(l => { if (l.getBounds().intersects(b)) fcontext.addLayer(L.polygon(l.getLatLngs(), style)); });
-    L.geoJSON(Aoi.exportGeoJSON(), {interactive:false, style:f => ({color:f.properties.color, weight:2, fillColor:f.properties.color, fillOpacity:f.properties.opacity}),
-      filter:f => L.geoJSON(f).getBounds().intersects(b),
-      onEachFeature:(f, l) => l.bindTooltip(escapeHtml(f.properties.name), {permanent:true, direction:"center", className:"aoi-label"})}).addTo(fcontext);
+    mask.eachLayer(l => { if (l.getBounds().intersects(b)) fcontext.addLayer(L.polygon(l.getLatLngs(), {...style, pmIgnore:true})); });
+  }
+  function placesList(list){
+    const counts = {}; list.forEach(x => counts[x.g] = (counts[x.g] || 0) + 1);
+    $("fPlacesStats").textContent = list.length ? Places.groups.filter(gr => counts[gr.id]).map(gr => `${gr.label} ${counts[gr.id]}`).join(" · ") : "No saved places in this square.";
+    const ul = $("fPlaces"); ul.textContent = "";
+    for (const x of list.slice().sort((u, w) => u.n.localeCompare(w.n)).slice(0, 300)){
+      const gr = Places.groups.find(q => q.id === x.g), li = document.createElement("li"), btn = document.createElement("button");
+      btn.innerHTML = `<span class="swatch" style="background:${gr.color}"></span><span><b>${escapeHtml(x.n)}</b> <span class="stat">${escapeHtml(Places.pretty(x.k))}</span></span>`;
+      btn.onclick = () => { fmap.setView([x.a, x.o], Math.max(fmap.getZoom(), 18));
+        fplaces.eachLayer(mk => { if (mk.poi === x) mk.openPopup(); }); };
+      li.append(btn); ul.append(li);
+    }
+  }
+  async function focusPlaces(c, fetchIfNew){
+    const b = L.latLngBounds(corners(c));
+    placesList(Places.drawOn(fmap, fplaces, b));
+    if (!fetchIfNew || !navigator.onLine || await Places.squareFetched(c.id)) return;
+    $("fPlacesMsg").textContent = "Fetching places for this square…";
+    const ok = await Places.fetchSquare(c.id, b);
+    if (g.focus?.id !== c.id) return;
+    $("fPlacesMsg").textContent = ok ? "" : "Some places could not be fetched. Try Refresh places.";
+    placesList(Places.drawOn(fmap, fplaces, b));
+  }
+  async function hiRes(c, force){
+    const b = L.latLngBounds(corners(c)).pad(0.05), bb = {s:b.getSouth(), w:b.getWest(), n:b.getNorth(), e:b.getEast()};
+    let zmax = NAIP.zmax; while (zmax >= NAIP.zmin && countTiles(tileRanges(bb, NAIP.zmin, zmax)) > (force ? 3000 : 700)) zmax--;
+    if (zmax < NAIP.zmin){ $("fHiRes").textContent = "This square is too big to save in full detail at once. Tiles you look at are still saved."; return; }
+    if (!navigator.onLine){ $("fHiRes").textContent = "Offline: showing the detail already saved for this square."; return; }
+    const token = ftoken = {}, ranges = tileRanges(bb, NAIP.zmin, zmax);
+    const res = await saveTiles("naip", NAIP.url, ranges, pr => { if (ftoken === token)
+      $("fHiRes").textContent = `High detail, zoom ${NAIP.zmin}–${zmax}: ${fmtN(pr.done)} of ${fmtN(pr.total)} tiles ready · ${fmtN(pr.saved)} new, ${fmtBytes(pr.bytes)}`; }, 4, () => ftoken !== token);
+    if (ftoken === token){ $("fHiRes").textContent = `High detail, zoom ${NAIP.zmin}–${zmax}: ${fmtN(res.done - res.failed)} of ${fmtN(res.total)} tiles saved for offline`
+        + (res.saved ? ` · ${fmtBytes(res.bytes)} new` : "") + (res.failed ? ` · ${res.failed} failed` : "");
+      fnaip.redraw(); }
   }
   function open(c){
-    g.focus = c; g.selected = c; $("focus").hidden = false; ensureFocusMap();
+    g.focus = c; g.sel.clear(); $("focus").hidden = false; ensureFocusMap();
     if (fsource !== state.source){ if (fbase) fmap.removeLayer(fbase); fbase = baseLayerFor(state.source).addTo(fmap); fsource = state.source; }
     fmap.invalidateSize();
     const b = L.latLngBounds(corners(c));
     fmap.setMaxBounds(null); fmap.setMinZoom(0);
     fmap.fitBounds(b, {padding:[16,16], animate:false});
     fmap.setMinZoom(fmap.getZoom()); fmap.setMaxBounds(b.pad(0.15));
-    context(b); setFMode(g.fmode); draw(fview, c); tools();
+    context(b); setFMode("select"); draw(fview, c); tools();
+    Aoi.focusOpen(fmap, b); $("fPlacesMsg").textContent = ""; focusPlaces(c, true); hiRes(c, false);
+    $("fZoomNote").textContent = "Zoom in past 16 for NAIP 0.3 m detail";
     $("focusTitle").textContent = ref(c); $("focusSub").textContent = `${sizeText(c.size)} square · grid ${ref(c).slice(0, 3)}`;
   }
-  function close(){ if (!g.focus) return; g.focus = null; g.selected = null; $("focus").hidden = true; render(); }
+  function close(){ if (!g.focus) return; ftoken = null; Aoi.focusClose(); if (fmap) fmap.pm.disableDraw();
+    g.focus = null; g.sel.clear(); $("focus").hidden = true; render(); }
+  const HINTS = {paint:"Tap or drag across squares to black them out. Tap a black square to clear it.",
+    select:"Tap a square to select it, or press and drag across several. Then split them 5×5.",
+    move:"Drag to move the map. Scroll or pinch to zoom.",
+    aoiPoly:"Click the corners of the area, then click the first corner to finish.", aoiRect:"Click two opposite corners of the area."};
   function setFMode(m){
+    if (fmap){ fmap.pm.disableDraw(); Aoi.focusStopReshape(); }
     g.fmode = m; document.querySelectorAll("[data-fmode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.fmode === m));
-    if (fmap) m === "paint" ? fmap.dragging.disable() : fmap.dragging.enable();
-    $("focusHint").textContent = m === "paint" ? "Tap or drag across squares to black them out. Tap a black square to clear it."
-      : "Tap a square to select it, then split it or black it out.";
+    if (fmap) (m === "paint" || m === "select") ? fmap.dragging.disable() : fmap.dragging.enable();
+    $("focusHint").textContent = HINTS[m];
+    const color = Aoi.currentColor(), opts = {snappable:false, continueDrawing:false, pathOptions:{color, weight:2, fillColor:color, fillOpacity:.3}};
+    if (fmap && m === "aoiPoly") fmap.pm.enableDraw("Polygon", opts);
+    if (fmap && m === "aoiRect") fmap.pm.enableDraw("Rectangle", opts);
   }
+  const targets = () => g.sel.size ? [...g.sel.values()] : [g.focus];
   function tools(){
-    const c = g.selected || g.focus; if (!c) return;
-    const isSplit = g.splits.has(c.id), isBlack = g.black.has(c.id);
+    if (!g.focus) return;
+    const sel = [...g.sel.values()], t = targets(), n = sel.length;
+    const splittable = t.filter(c => !g.splits.has(c.id)), splitNow = t.filter(c => g.splits.has(c.id));
     const inside = [...g.black].filter(id => within(parse(id), g.focus)).length;
-    $("focusSel").innerHTML = `Selected <b>${ref(c)}</b> · ${sizeText(c.size)}${isSplit ? ` · split ${g.splits.get(c.id)}×${g.splits.get(c.id)}` : ""}${isBlack ? ` · <span class="pill bad">blacked out</span>` : ""}`;
-    $("fSplit").textContent = isSplit ? "Re-split" : "Split"; $("fUnsplit").disabled = !isSplit;
-    $("fBlack").textContent = isBlack ? "Clear blackout" : "Black out selected";
+    $("focusSel").innerHTML = n === 0 ? "Nothing selected. Split applies to the whole square."
+      : n === 1 ? `Selected <b>${ref(sel[0])}</b> · ${sizeText(sel[0].size)}${g.splits.has(sel[0].id) ? " · split 5×5" : ""}${g.black.has(sel[0].id) ? ` · <span class="pill bad">blacked out</span>` : ""}`
+      : `<b>${fmtN(n)}</b> squares selected`;
+    $("fSplit").textContent = n > 1 ? `Split ${fmtN(splittable.length)} squares 5×5` : n === 1 ? "Split 5×5" : "Split whole square 5×5";
+    $("fSplit").disabled = splittable.length === 0;
+    $("fUnsplit").disabled = splitNow.length === 0; $("fSelClear").disabled = n === 0;
+    $("fAoi").textContent = n > 1 ? `Selected → ${fmtN(n)} areas` : "Selected → area";
     $("fClearAll").disabled = inside === 0; $("focusStats").textContent = `${fmtN(inside)} blacked-out squares in this square`;
   }
   const after = () => { save(); render(); tools(); };
-  $("fSplit").onclick = () => { const c = g.selected || g.focus; pushUndo("split square"); split(c, +$("fSplitN").value); after(); };
-  $("fUnsplit").onclick = () => { const c = g.selected || g.focus; pushUndo("remove split"); unsplit(c); after(); };
-  $("fBlack").onclick = () => { const c = g.selected || g.focus; pushUndo("grid black out");
-    g.black.has(c.id) ? g.black.delete(c.id) : (dropSubtree(c), g.black.add(c.id)); after(); };
+  $("fSplit").onclick = () => { const t = targets().filter(c => !g.splits.has(c.id)); if (!t.length) return;
+    pushUndo(t.length > 1 ? `split ${t.length} squares` : "split square"); t.forEach(c => split(c, SPLIT)); g.sel.clear(); after(); };
+  $("fUnsplit").onclick = () => { const t = targets().filter(c => g.splits.has(c.id)); if (!t.length) return;
+    pushUndo("remove split"); t.forEach(unsplit); g.sel.clear(); after(); };
+  $("fSelClear").onclick = () => { g.sel.clear(); render(); tools(); };
   $("fClearAll").onclick = () => { pushUndo("clear square"); clearBlack(g.focus); after(); };
-  $("fAoi").onclick = () => { const c = g.selected || g.focus; const a = Aoi.addArea(ref(c), {type:"Polygon", coordinates:[ring(c)]});
-    log(`Added area of interest ${a.name}`); context(L.latLngBounds(corners(g.focus))); };
+  $("fAoi").onclick = () => { const t = targets(); t.forEach(c => Aoi.addArea(ref(c), {type:"Polygon", coordinates:[ring(c)]}, null, true));
+    log(t.length > 1 ? `Added ${t.length} areas of interest` : `Added area of interest ${ref(t[0])}`); };
+  $("fAoiCat").onchange = e => Aoi.setCurrent(e.target.value);
+  $("fPlacesRefresh").onclick = async () => { if (!g.focus) return; const c = g.focus; $("fPlacesMsg").textContent = "Fetching places for this square…";
+    const ok = await Places.fetchSquare(c.id, L.latLngBounds(corners(c))); if (g.focus?.id !== c.id) return;
+    $("fPlacesMsg").textContent = ok ? "" : "Some places could not be fetched. Try again."; focusPlaces(c, false); };
+  $("fHiResGet").onclick = () => g.focus && hiRes(g.focus, true);
   $("fSee").onchange = e => { g.seeThrough = e.target.checked; context(L.latLngBounds(corners(g.focus))); draw(fview, g.focus); };
   $("fUndo").onclick = () => { undo(); if (g.focus){ context(L.latLngBounds(corners(g.focus))); tools(); } };
   $("focusClose").onclick = close;
@@ -225,7 +293,8 @@ const Grid = (() => {
     ZONE_W = Math.min(-180 + (ZONE-1)*6, bbox.w); ZONE_E = Math.max(-180 + ZONE*6, bbox.e);
     close(); render();
   }
-  return {init, render, setZone, snapshot:() => ({splits:[...g.splits], black:[...g.black]}),
+  const openAt = ll => { const p = toUtm(ll); open(cell(g.base, Math.floor(p.e/g.base)*g.base, Math.floor(p.n/g.base)*g.base)); };
+  return {init, render, setZone, openAt, focusMode:() => g.fmode, setFocusMode:m => setFMode(m), snapshot:() => ({splits:[...g.splits], black:[...g.black]}),
     restore:s => { g.splits = new Map(s.splits); g.black = new Set(s.black); save(); render(); if (g.focus) tools(); },
     exportGeoJSON, mgrsAt};
 })();

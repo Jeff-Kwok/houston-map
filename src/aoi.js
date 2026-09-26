@@ -23,11 +23,13 @@ const Aoi = (() => {
   }
   const redrawAll = () => a.areas.forEach(draw);
 
-  function addArea(name, geometry, catId){
+  function addArea(name, geometry, catId, quiet = false){
     if (!a.cats.length) addCat();
     pushUndo("add area");
     const area = {id:uid(), name, cat:catId || a.current || a.cats[0].id, geometry, created_utc:new Date().toISOString()};
-    a.areas.push(area); draw(area); select(area.id); save();
+    a.areas.push(area); draw(area);
+    if (quiet){ renderPanel(); save(); return area; }
+    select(area.id); save();
     const input = document.querySelector(`[data-area="${area.id}"] input.aname`); input?.focus(); input?.select();
     return area;
   }
@@ -86,16 +88,12 @@ const Aoi = (() => {
       li.innerHTML = `<span class="swatch" style="background:${cat(area.cat).color}"></span>
         <input type="text" class="aname" value="${esc(area.name)}" aria-label="Area name">
         <select aria-label="Category">${a.cats.map(c => `<option value="${c.id}"${c.id===area.cat?" selected":""}>${esc(c.name)}</option>`).join("")}</select>
-        <div class="row"><button data-act="zoom">Zoom to</button><button data-act="shape">${a.reshaping===area.id?"Done":"Reshape"}</button><button data-act="del">Delete</button></div>`;
+        <div class="row"><button data-act="zoom">Zoom to</button><button data-act="open">Open square</button><button data-act="del">Delete</button></div>`;
       li.querySelector(".aname").onchange = e => { area.name = e.target.value.trim() || area.name; draw(area); save(); };
       li.querySelector("select").onchange = e => { area.cat = e.target.value; draw(area); renderPanel(); save(); };
       li.onclick = e => { if (e.target === li || e.target.classList.contains("swatch")) select(area.id); };
       li.querySelector('[data-act="zoom"]').onclick = () => { const l = layers.get(area.id); if (l) map.fitBounds(l.getBounds(), {padding:[40,40]}); select(area.id); };
-      li.querySelector('[data-act="shape"]').onclick = () => {
-        if (a.reshaping === area.id){ stopReshape(); return; }
-        stopReshape(); setMode("pan"); const l = layers.get(area.id); if (!l) return;
-        pushUndo("reshape area"); a.reshaping = area.id; l.pm.enable({snappable:false, allowSelfIntersection:false}); renderPanel();
-      };
+      li.querySelector('[data-act="open"]').onclick = () => Grid.openAt(boundsOf(area).getCenter());
       const del = li.querySelector('[data-act="del"]');
       del.onclick = () => {
         if (del.dataset.armed !== "1"){ del.dataset.armed = "1"; del.textContent = "Confirm"; setTimeout(() => { del.dataset.armed = ""; del.textContent = "Delete"; }, 3000); return; }
@@ -110,7 +108,74 @@ const Aoi = (() => {
   const refreshSwatches = () => document.querySelectorAll("#aoiList li").forEach(li => {
     const area = a.areas.find(x => x.id === li.dataset.area); if (area) li.querySelector(".swatch").style.background = cat(area.cat).color; });
 
-  const save = () => kvPut("aoi", {cats:a.cats, areas:a.areas, showNames:a.showNames, current:a.current}).catch(()=>{});
+  const save = () => { kvPut("aoi", {cats:a.cats, areas:a.areas, showNames:a.showNames, current:a.current}).catch(()=>{});
+    if (fx && !fx.reshaping){ focusDraw(); focusPanel(); } };
+
+  /* ---------- focus view: draw, reshape, rename and delete the areas in one square ---------- */
+  let fx = null;
+  const boundsOf = area => L.geoJSON(area.geometry).getBounds();
+  const areasIn = b => a.areas.filter(x => boundsOf(x).intersects(b));
+  function focusOpen(m, b){
+    focusClose();
+    if (!m.getPane("faoi")){ const el = m.createPane("faoi"); el.style.zIndex = 420; }
+    fx = {m, b, group:L.layerGroup().addTo(m), layers:new Map(), sel:null, reshaping:null, renderer:L.svg({pane:"faoi"})};
+    focusDraw(); focusPanel();
+  }
+  function focusClose(){ if (!fx) return; focusStopReshape(false); fx.group.remove(); fx = null; }
+  function focusDraw(){
+    if (!fx) return; fx.group.clearLayers(); fx.layers.clear();
+    for (const area of areasIn(fx.b)){
+      if (!cat(area.cat).visible) continue;
+      const st = {...styleFor(area), weight: area.id === fx.sel ? 4 : 2};
+      const poly = L.geoJSON(area.geometry, {renderer:fx.renderer, style:() => st}).getLayers()[0]; if (!poly) continue;
+      if (a.showNames) poly.bindTooltip(esc(area.name), {permanent:true, direction:"center", className:"aoi-label", interactive:false});
+      poly.on("click", e => { if (Grid.focusMode() !== "select" || fx.reshaping) return; fx.sel = area.id; focusDraw(); focusPanel(); L.DomEvent.stop(e); });
+      poly.on("pm:edit", () => { area.geometry = poly.toGeoJSON().geometry; draw(area); save(); });
+      fx.group.addLayer(poly); fx.layers.set(area.id, poly);
+    }
+  }
+  function focusStopReshape(refresh = true){
+    if (!fx || !fx.reshaping) return;
+    fx.layers.get(fx.reshaping)?.pm.disable(); fx.reshaping = null;
+    if (refresh){ focusDraw(); focusPanel(); }
+  }
+  function focusPanel(){
+    if (!fx) return;
+    $("fAoiCat").innerHTML = a.cats.map(c => `<option value="${c.id}"${c.id===a.current?" selected":""}>${esc(c.name)}</option>`).join("");
+    const ul = $("fAoiList"); ul.textContent = "";
+    const rows = areasIn(fx.b);
+    $("fAoiStats").textContent = rows.length ? `${fmtN(rows.length)} areas touch this square` : "No areas in this square yet. Use Draw area or Box area.";
+    for (const area of rows){
+      const li = document.createElement("li"); li.dataset.farea = area.id; if (area.id === fx.sel) li.className = "sel";
+      const reshaping = fx.reshaping === area.id;
+      li.innerHTML = `<span class="swatch" style="background:${cat(area.cat).color}"></span>
+        <input type="text" class="aname" value="${esc(area.name)}" aria-label="Area name">
+        <select aria-label="Category">${a.cats.map(c => `<option value="${c.id}"${c.id===area.cat?" selected":""}>${esc(c.name)}</option>`).join("")}</select>
+        <div class="row"><button data-act="shape"${reshaping ? ' class="primary"' : ""}>${reshaping ? "Done reshaping" : "Reshape"}</button><button data-act="del">Delete</button></div>`;
+      li.querySelector(".aname").onchange = e => { area.name = e.target.value.trim() || area.name; draw(area); renderPanel(); save(); };
+      li.querySelector("select").onchange = e => { area.cat = e.target.value; draw(area); renderPanel(); save(); };
+      li.querySelector('[data-act="shape"]').onclick = () => {
+        if (reshaping){ focusStopReshape(); return; }
+        focusStopReshape(false); Grid.setFocusMode("select"); pushUndo("reshape area");
+        fx.sel = area.id; fx.reshaping = area.id; fx.layers.get(area.id)?.pm.enable({snappable:false, allowSelfIntersection:false}); focusPanel();
+      };
+      const del = li.querySelector('[data-act="del"]');
+      del.onclick = () => {
+        if (del.dataset.armed !== "1"){ del.dataset.armed = "1"; del.textContent = "Confirm"; setTimeout(() => { del.dataset.armed = ""; del.textContent = "Delete"; }, 3000); return; }
+        pushUndo("delete area"); a.areas = a.areas.filter(x => x !== area);
+        const l = layers.get(area.id); if (l){ group.removeLayer(l); layers.delete(area.id); }
+        renderPanel(); save();
+      };
+      ul.append(li);
+    }
+  }
+  function focusCreated(layer){
+    fx.m.removeLayer(layer);
+    const c = cat(a.current), n = a.areas.filter(x => x.cat === c.id).length + 1;
+    const area = addArea(`${c.name} ${n}`, layer.toGeoJSON().geometry, c.id, true);
+    fx.sel = area.id; focusDraw(); focusPanel();
+    const input = document.querySelector(`[data-farea="${area.id}"] input.aname`); input?.focus(); input?.select();
+  }
   async function init(){
     const s = await kvGet("aoi").catch(()=>null);
     if (s){ a.cats = s.cats || []; a.areas = s.areas || []; a.showNames = s.showNames !== false; a.current = s.current; }
@@ -144,7 +209,8 @@ const Aoi = (() => {
   }
   map.on("zoomend", () => map.getContainer().classList.toggle("z-lo", map.getZoom() < 12));
   map.on("click", () => { if (state.mode === "pan" && a.selected){ a.selected = null; redrawAll(); renderPanel(); } });
-  return {init, created, addArea, selectedId:() => a.selected, exportGeoJSON, importGeoJSON, stopReshape,
+  return {init, created, addArea, selectedId:() => a.selected, focusOpen, focusClose, focusCreated, focusStopReshape,
+    currentColor:() => cat(a.current)?.color || "#f5b301", setCurrent:id => { a.current = id; renderPanel(); save(); }, exportGeoJSON, importGeoJSON, stopReshape,
     snapshot:() => JSON.parse(JSON.stringify({cats:a.cats, areas:a.areas})),
     restore:s => { stopReshape(); a.cats = s.cats; a.areas = s.areas; [...layers.values()].forEach(l => group.removeLayer(l)); layers.clear(); redrawAll(); renderPanel(); save(); }};
 })();

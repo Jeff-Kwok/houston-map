@@ -96,7 +96,7 @@ const Places = (() => {
   }
   let busy = false;
   async function fetchPois(b, label){
-    if (busy) return; busy = true; $("poiView").disabled = $("poiCity").disabled = true;
+    if (busy) return false; busy = true; $("poiView").disabled = $("poiCity").disabled = true;
     const step = 0.1, cells = [];
     for (let s = b.s; s < b.n; s += step) for (let w = b.w; w < b.e; w += step) cells.push([s, w, Math.min(s+step, b.n), Math.min(w+step, b.e)]);
     log(`Fetching places for ${label} in ${cells.length} pieces`);
@@ -116,7 +116,27 @@ const Places = (() => {
     await kvPut("pois", p.pois).catch(()=>{});
     log(`Added ${fmtN(added)} places` + (failed ? `; ${failed} pieces failed, run it again to fill them` : ""));
     busy = false; $("poiView").disabled = $("poiCity").disabled = false;
+    return failed === 0;
   }
+
+  /* ---------- focus view: the places inside one grid square ---------- */
+  const inBounds = b => p.pois.filter(x => b.contains([x.a, x.o]) && !p.off.has(x.g));
+  function drawOn(m, group, b){
+    group.clearLayers();
+    if (!m.getPane("fpois")){ const el = m.createPane("fpois"); el.style.zIndex = 640; }
+    const r = L.canvas({pane:"fpois", padding:0.3}), list = inBounds(b);
+    for (const x of list){
+      const mk = L.circleMarker([x.a, x.o], {renderer:r, radius:6, color:"#ffffff", weight:1.5, fillColor:GROUP[x.g].color, fillOpacity:1, bubblingMouseEvents:false});
+      mk.bindPopup(() => popupHtml(x), {maxWidth:260}); mk.poi = x; group.addLayer(mk);
+    }
+    return list;
+  }
+  async function fetchSquare(id, b){
+    const ok = await fetchPois({s:b.getSouth(), w:b.getWest(), n:b.getNorth(), e:b.getEast()}, "this square");
+    if (ok){ const done = new Set(await kvGet("poiSquares").catch(()=>null) || []); done.add(id); await kvPut("poiSquares", [...done]).catch(()=>{}); }
+    return ok;
+  }
+  const squareFetched = async id => (await kvGet("poiSquares").catch(()=>null) || []).includes(id);
   let namesBusy = false;
   function ensureNames(b){ if (!p.places.some(x => x.a > b.s && x.a < b.n && x.o > b.w && x.o < b.e) && navigator.onLine) fetchPlaceNames(b); }
   async function fetchPlaceNames(b = Packages.bbox()){
@@ -179,5 +199,5 @@ const Places = (() => {
     index(); counts(); render();
   }
   map.on("moveend", render);
-  return {init, ensureNames};
+  return {init, ensureNames, drawOn, fetchSquare, squareFetched, groups:GROUPS, pretty};
 })();
