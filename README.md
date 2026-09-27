@@ -19,6 +19,9 @@ It installs as an app on phone and desktop and works offline.
 - **Places:** pips by category from OpenStreetMap (ODbL) plus Overture Maps places (CDLA-Permissive-2.0).
   `tools/places_pack.py` splits Overture places for the package square into 0.05° cell files (confidence ≥ 0.7,
   categorised, not closed); a focus square loads only the cells it touches. City/town/neighborhood labels and search.
+- **Street labels:** street, highway, water, park and transit names over the imagery, like Google's hybrid view,
+  from a Protomaps (OpenStreetMap, ODbL) vector extract of the package square (`tools/labels_pack.sh`, 55 MB).
+  The app reads it by byte range and keeps every range it reads, so labels you have seen work offline.
 
 Everything you make stays in the browser on each device; export and import GeoJSON to move it.
 

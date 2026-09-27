@@ -174,6 +174,9 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
     <summary>Places and names</summary>
     <label><input type="checkbox" id="showCities"> City and town names</label>
     <label><input type="checkbox" id="showHoods"> Neighborhood names</label>
+    <label><input type="checkbox" id="showStreetLabels"> Street, water and park names</label>
+    <label><input type="checkbox" id="showRoads"> Road lines under the names</label>
+    <p class="note" id="labelsNote"></p>
     <label><input type="checkbox" id="showPois"> Place pips (from zoom 15)</label>
     <div id="poiGroups" class="groups"></div>
     <div class="row">
@@ -352,6 +355,8 @@ button.floating{position:absolute;z-index:850;left:calc(340px + 12px);bottom:cal
 
 <script>/*INLINE:vendor/leaflet.js*/</script>
 <script>/*INLINE:vendor/leaflet-geoman.js*/</script>
+<script>/*INLINE:vendor/pmtiles.js*/</script>
+<script>/*INLINE:vendor/protomaps-leaflet.js*/</script>
 <script>/*INLINE:src/utm.js*/</script>
 <script>
 "use strict";
@@ -591,6 +596,10 @@ async function installPack(){
   const btn = $("packGet"); btn.disabled = true;
   if (Packages.prebuilt()) for (const [k, pk] of PACKS.entries()) await installOnePack(pk, f => $("packBar").style.width = (100*(k+f)/PACKS.length).toFixed(1) + "%");
   else { await liveDownload(Packages.bbox(), 8, 13, "package, zoom 8–13"); await liveDownload(Packages.core(), 14, 15, "city core, zoom 14–15"); }
+  if (Labels.ready()){
+    const r = await Labels.prefetch(Packages.bbox(), 0, 14, (d, t) => { if (d % 50 === 0 || d === t) $("packInfo").textContent = `Street labels: ${fmtN(d)} of ${fmtN(t)} tiles`; });
+    log(`Street labels saved for offline: ${fmtN(r.done)} tiles`);
+  }
   if ($("packRegion14").checked) await liveDownload(Packages.bbox(), 14, 14, "package, zoom 14");
   if ($("packZ16").checked) await liveDownload(Packages.core(), 16, 16, "city core, zoom 16");
   refreshStats("usgs"); base.redraw(); btn.disabled = false;
@@ -838,6 +847,7 @@ map.on("moveend", () => hud(map.getCenter()));
 <script>/*INLINE:src/aoi.js*/</script>
 <script>/*INLINE:src/places.js*/</script>
 <script>/*INLINE:src/packages.js*/</script>
+<script>/*INLINE:src/labels.js*/</script>
 <script>
 "use strict";
 /* ---------- boot ---------- */
@@ -860,7 +870,7 @@ if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.reg
   await Grid.init(); await Aoi.init(); hud(map.getCenter());
   Promise.all(PACKS.map(pk => fetch(`packs/${pk.id}/index.json`, {cache:"no-cache"}).then(r => r.ok ? r.json() : null).catch(() => null)))
     .then(ix => { if (ix.every(Boolean)) $("packInfo").textContent = ix.map(i => `${i.name}: zoom ${i.zmin}–${i.zmax}, ${fmtN(i.tiles)} tiles, ${fmtBytes(i.bytes)}`).join(" · "); });
-  await Places.init(); await Packages.init();
+  await Places.init(); await Packages.init(); await Labels.init();
   log(fc ? "Loaded your saved blackout" : "No blackout yet. Use Fetch for city core to start.");
 })();
 </script>

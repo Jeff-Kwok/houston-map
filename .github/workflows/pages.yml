@@ -32,6 +32,11 @@ jobs:
           if [ ! -f dist/packs/places/index.json ]; then
             pip install duckdb==1.5.5 && python3 tools/places_pack.py --release 2026-09-23.0 --out dist/packs/places
           fi
+      - uses: actions/cache@v4
+        with:
+          path: dist/packs/labels
+          key: protomaps-houston-z14-v1
+      - run: if [ ! -f dist/packs/labels/houston.pmtiles ]; then ./tools/labels_pack.sh; fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -261,6 +261,8 @@ const Grid = (() => {
     fmap.fitBounds(b, {padding:[16,16], animate:false});
     fmap.setMinZoom(fmap.getZoom()); fmap.setMaxBounds(b.pad(0.15));
     context(b); setFMode("select"); draw(fview, c); tools();
+    Labels.attach(fmap, "fStreetLabels");
+    if (Labels.ready() && navigator.onLine){ const bb = {s:b.getSouth(), w:b.getWest(), n:b.getNorth(), e:b.getEast()}; Labels.prefetch(bb, 12, 14); }
     Aoi.focusOpen(fmap, b); $("fPlacesMsg").textContent = ""; $("fPlacesFilter").value = ""; focusPlaces(c, true); hiRes(c, false);
     kvGet("focusEsri").catch(() => undefined).then(v => { const on = v !== false; $("fEsri").checked = on; esriToggle(on); });
     zoomNote();
@@ -348,7 +350,8 @@ const Grid = (() => {
     close(); render();
   }
   const openAt = ll => { const p = toUtm(ll); open(cell(g.base, Math.floor(p.e/g.base)*g.base, Math.floor(p.n/g.base)*g.base)); };
-  return {init, render, setZone, openAt, focusMode:() => g.fmode, setFocusMode:m => setFMode(m), snapshot:() => ({splits:[...g.splits], black:[...g.black]}),
+  const labelsChanged = () => { if (g.focus && fmap) Labels.attach(fmap, "fStreetLabels"); };
+  return {init, render, setZone, openAt, labelsChanged, focusMode:() => g.fmode, setFocusMode:m => setFMode(m), snapshot:() => ({splits:[...g.splits], black:[...g.black]}),
     restore:s => { g.splits = new Map(s.splits); g.black = new Set(s.black); save(); render(); if (g.focus) tools(); },
     exportGeoJSON, mgrsAt};
 })();
