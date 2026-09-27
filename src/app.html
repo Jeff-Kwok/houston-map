@@ -436,7 +436,8 @@ const OfflineTiles = L.TileLayer.extend({
   }
 });
 const NaipTiles = OfflineTiles.extend({ getTileUrl(c){ return NAIP.url(c.z, c.x, c.y); } });
-const naipLayer = () => { const l = new NaipTiles("", {sourceKey:NAIP.key, minZoom:NAIP.zmin, maxZoom:19, maxNativeZoom:NAIP.zmax, alwaysStore:true, keepBuffer:2});
+const FOCUS_MAX_ZOOM = 21;   // past zoom 19 every source is enlarged; the extra zoom is for precise drawing and tapping
+const naipLayer = () => { const l = new NaipTiles("", {sourceKey:NAIP.key, minZoom:NAIP.zmin, maxZoom:FOCUS_MAX_ZOOM, maxNativeZoom:NAIP.zmax, alwaysStore:true, keepBuffer:2});
   l.on("tileunload", e => { if (e.tile.src.startsWith("blob:")) URL.revokeObjectURL(e.tile.src); }); return l; };
 async function saveTiles(sourceKey, urlOf, ranges, onProgress, workers = 4, cancelled = () => false){
   const it = tileIter(ranges), total = countTiles(ranges); let done = 0, saved = 0, bytes = 0, failed = 0;
@@ -461,9 +462,9 @@ function applyDomainLock(){
   map.setMinZoom(state.domainLock ? 8 : 3);
   setSource(state.source);
 }
-function baseLayerFor(key, bounds){
+function baseLayerFor(key, bounds, maxZoom = 19){
   const s = SOURCES[key];
-  const layer = new OfflineTiles(s.url, {sourceKey:key, maxNativeZoom:s.maxNative, maxZoom:19, attribution:s.attr,
+  const layer = new OfflineTiles(s.url, {sourceKey:key, maxNativeZoom:s.maxNative, maxZoom, attribution:s.attr,
     keepBuffer:4, updateWhenZooming:false, bounds});
   layer.on("tileunload", e => { if (e.tile.src.startsWith("blob:")) URL.revokeObjectURL(e.tile.src); });
   return layer;

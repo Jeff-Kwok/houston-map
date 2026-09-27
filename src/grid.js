@@ -150,7 +150,7 @@ const Grid = (() => {
     $("fLabelNote").textContent = shownPlaces.length > n ? `Names shown for ${fmtN(n)} of ${fmtN(shownPlaces.length)} places; zoom in for more.` : ""; };
   function ensureFocusMap(){
     if (fmap) return;
-    fmap = L.map("focusMap", {zoomControl:true, attributionControl:false, maxZoom:19, zoomSnap:0.25, boxZoom:false, doubleClickZoom:false});
+    fmap = L.map("focusMap", {zoomControl:true, attributionControl:false, maxZoom:FOCUS_MAX_ZOOM, zoomSnap:0.25, boxZoom:false, doubleClickZoom:false});
     fview = makeView(fmap, "focus");
     fnaip = naipLayer().addTo(fmap); fplaces = L.layerGroup().addTo(fmap); flabels = L.layerGroup().addTo(fmap);
     { const el = fmap.createPane("fpoiLabels"); el.style.zIndex = 645; el.style.pointerEvents = "none"; }
@@ -198,12 +198,12 @@ const Grid = (() => {
   }
   let fesri = null;
   const zoomNote = () => { const z = fmap.getZoom(), esri = fesri && fmap.hasLayer(fesri) && z >= 17;
-    $("fZoomNote").textContent = esri ? `Showing Esri World Imagery (online) · zoom ${z.toFixed(1)}`
+    $("fZoomNote").textContent = esri ? `Showing Esri World Imagery (online) · zoom ${z.toFixed(1)}${z > 19 ? " (enlarged past its detail)" : ""}`
       : z >= NAIP.zmin - 0.5 ? `Showing NAIP 0.6 m aerial imagery · zoom ${z.toFixed(1)}${z > 18 ? " (enlarged past its detail)" : ""}`
       : "Zoom in for NAIP 0.6 m detail"; };
   function esriToggle(on){
     if (!fmap) return;
-    if (!fesri){ const s = SOURCES.esri; fesri = L.tileLayer(s.url, {minZoom:17, maxZoom:19, maxNativeZoom:s.maxNative, keepBuffer:2}); }
+    if (!fesri){ const s = SOURCES.esri; fesri = L.tileLayer(s.url, {minZoom:17, maxZoom:FOCUS_MAX_ZOOM, maxNativeZoom:s.maxNative, keepBuffer:2}); }
     on && navigator.onLine ? fesri.addTo(fmap) : fesri.remove(); zoomNote();
     kvPut("focusEsri", !!on).catch(()=>{});
   }
@@ -254,7 +254,7 @@ const Grid = (() => {
   }
   function open(c){
     g.focus = c; g.sel.clear(); $("focus").hidden = false; ensureFocusMap();
-    if (fsource !== state.source){ if (fbase) fmap.removeLayer(fbase); fbase = baseLayerFor(state.source).addTo(fmap); fsource = state.source; }
+    if (fsource !== state.source){ if (fbase) fmap.removeLayer(fbase); fbase = baseLayerFor(state.source, undefined, FOCUS_MAX_ZOOM).addTo(fmap); fsource = state.source; }
     fmap.invalidateSize();
     const b = L.latLngBounds(corners(c));
     fmap.setMaxBounds(null); fmap.setMinZoom(0);
@@ -262,7 +262,7 @@ const Grid = (() => {
     fmap.setMinZoom(fmap.getZoom()); fmap.setMaxBounds(b.pad(0.15));
     context(b); setFMode("select"); draw(fview, c); tools();
     Aoi.focusOpen(fmap, b); $("fPlacesMsg").textContent = ""; $("fPlacesFilter").value = ""; focusPlaces(c, true); hiRes(c, false);
-    kvGet("focusEsri").then(v => { $("fEsri").checked = !!v; esriToggle(!!v); }).catch(()=>{});
+    kvGet("focusEsri").catch(() => undefined).then(v => { const on = v !== false; $("fEsri").checked = on; esriToggle(on); });
     zoomNote();
     $("focusTitle").textContent = ref(c); $("focusSub").textContent = `${sizeText(c.size)} square · grid ${ref(c).slice(0, 3)}`;
   }
